@@ -10,6 +10,8 @@ export const panelState = reactive({
   missing: 0,
   raw: 0,
   initRunning: false,
+  initProgress: 0,
+  initStage: '',
   initError: '',
   lastSealed: 0,
 });

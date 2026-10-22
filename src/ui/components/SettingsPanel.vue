@@ -32,16 +32,19 @@
     </label>
 
     <label class="mneme-field">
-      <span>完整摘要保留条数</span>
+      <span>原始对话保留轮数</span>
       <input
         class="mneme-input"
         type="number"
         min="0"
-        max="30"
-        :value="settingsStore.fullDetailTurns"
-        @change="patchNumber('fullDetailTurns', $event)"
+        max="40"
+        :value="settingsStore.keepRecentTurns"
+        @change="patchNumber('keepRecentTurns', $event)"
       />
     </label>
+    <p class="mneme-muted">
+      仅对聊天补全接口生效；系统提示与记忆账本始终保留，摘要不受影响。
+    </p>
 
     <label class="mneme-field">
       <span>重要记忆保留卷数</span>
@@ -178,7 +181,7 @@ function patch<K extends keyof typeof settingsStore>(key: K, value: unknown): vo
 }
 
 function patchNumber(
-  key: 'volumeSize' | 'tokenBudget' | 'majorRetentionVolumes' | 'fullDetailTurns',
+  key: 'volumeSize' | 'tokenBudget' | 'majorRetentionVolumes' | 'keepRecentTurns',
   event: Event,
 ): void {
   const value = Number((event.target as HTMLInputElement).value) || 0;

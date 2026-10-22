@@ -315,8 +315,10 @@ MNEME-->
 每次状态变化后重建，使用：
 
 ```js
-setExtensionPrompt('mneme', text, 0 /* IN_PROMPT */, 0, false, 0 /* SYSTEM */)
+setExtensionPrompt('mneme', text, 1 /* IN_CHAT */, 1, false, 0 /* SYSTEM */)
 ```
+
+**为什么用 IN_CHAT 而不是 IN_PROMPT**：酒馆的 `IN_PROMPT` 扩展提示词需要依赖预设里的 `main` 提示词来定位；如果预设没有 `main`（不少自定义预设如此），提示词会被**静默丢弃**。`IN_CHAT` + depth 1 不依赖预设结构，稳定地作为一条 system 消息插在最后一条消息之前。
 
 拼装顺序即优先级，裁剪从尾部开始：
 
@@ -387,7 +389,7 @@ interface MnemeSettings {
   volumeSize: number;              // 默认 10，范围 5–30
   majorRetentionVolumes: number;   // major 条目封卷后继续注入的卷数，默认 2
   tokenBudget: number;             // 默认 2000
-  fullDetailTurns: number;         // 最近 N 条保留完整摘要，更早的压成一句，默认 10
+  keepRecentTurns: number;         // 生成前裁剪原始对话，保留最近 N 轮，默认 10；摘要始终完整注入
   directorView: 'current' | 'current-next' | 'volume' | 'full';  // 默认 current
   autoInitBonds: boolean;          // 新聊天自动解析初始羁绊，默认 true
   autoTimeline: boolean;           // 新聊天自动生成时间轴，默认 false
@@ -417,6 +419,7 @@ interface MnemeSettings {
 | `MESSAGE_DELETED` | 删条目、羁绊事件、道具记录；重算注入 |
 | `CHAT_CHANGED` | 重载状态 → 必要时触发初始化解析 → 重建注入 |
 | `GENERATION_STARTED` | 确保注入是最新的（兜底） |
+| `GENERATE_AFTER_DATA` | 只对含记忆账本的聊天补全请求，裁剪 `generate_data.prompt` 中的旧原始对话；保留全部 system 消息与最近 N 轮 |
 | `GENERATION_ENDED` | 若本条缺增量块，按设置提示 |
 
 初始化解析在 `CHAT_CHANGED` 后延迟执行，避免与开场渲染抢资源；同一聊天只跑一次（以 `timeline.generatedAt` / `bonds` 是否为空判断）。
@@ -511,7 +514,8 @@ interface MnemeSettings {
 - 解析结果兼容模型常见的变体：`plot_timeline` / `timeline` / `nodes` / 顶层数组；节点字段兼容 `description`、`stage`、`node_id`；未知类型归为主线、分支类归为支线。
 - 提示词里直接给出 JSON 骨架，不再只依赖 `jsonSchema`；后端不支持 `jsonSchema` 时自动重试一次纯提示词。
 - 无法识别时明确报错并在面板显示顶层字段名，不再静默失败。
-- 新增 `fullDetailTurns`：当前卷中超出最近 N 条的摘要只注入一句缩写，节省 token。
+- 新增 `keepRecentTurns`：在生成前裁剪**原始对话前文**，只保留最近 N 轮 user/assistant 消息；所有 system 消息（含记忆账本）保留。摘要本身始终完整注入，不参与压缩。
+- 当前卷的所有摘要改为「预算不可裁剪」：2000 token 预算只裁卷宗复盘、羁绊、道具、导演视野，摘要永远完整到达模型。
 
 ---
 

@@ -34,7 +34,8 @@ const ctx = {
     MESSAGE_EDITED: 'message_edited',
     MESSAGE_DELETED: 'message_deleted',
     CHAT_CHANGED: 'chat_changed',
-    GENERATION_STARTED: 'generation_started'
+    GENERATION_STARTED: 'generation_started',
+    GENERATE_AFTER_DATA: 'generate_after_data'
   },
   eventSource: {
     on(event, handler) { (window.__handlers[event] ||= []).push(handler); }
@@ -405,6 +406,32 @@ async function main() {
       ),
       true,
     );
+
+    // 原始对话前文裁剪：保留 system（含记忆账本）与最近 N 轮
+    const trimResult = await evaluate(`(() => {
+      const ctx = window.__ctx;
+      ctx.extensionSettings.mneme = { ...(ctx.extensionSettings.mneme ?? {}), keepRecentTurns: 2 };
+      const prompt = [{ role: 'system', content: '系统提示' }];
+      for (let i = 1; i <= 10; i += 1) {
+        prompt.push({ role: 'user', content: '问题' + i });
+        prompt.push({ role: 'assistant', content: '回答' + i });
+      }
+      prompt.push({ role: 'system', content: '<Mneme·记录要求>账本</Mneme·记录要求>' });
+      const data = { prompt };
+      window.__handlers['generate_after_data'][0](data);
+      const contents = data.prompt.map((m) => m.content);
+      return JSON.stringify({
+        length: data.prompt.length,
+        hasMemory: contents.some((c) => String(c).includes('Mneme·记录要求')),
+        has9: contents.includes('问题9'),
+        has1: contents.includes('问题1'),
+      });
+    })()`);
+    const trimmed = JSON.parse(trimResult);
+    check('裁剪后仍保留记忆账本', trimmed.hasMemory, true);
+    check('裁剪后保留最近对话', trimmed.has9, true);
+    check('裁剪后移除旧对话', trimmed.has1, false);
+    check('裁剪后消息数减少', trimmed.length, 6);
 
     results.push('');
     results.push(`结果：${pass} 通过 / ${fail} 失败`);

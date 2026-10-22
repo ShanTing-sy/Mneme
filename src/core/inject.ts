@@ -27,10 +27,6 @@ function renderEntries(entries: MemoryEntry[], title: string): string {
   return `<Mneme·${title}>\n${entries.map(renderEntryLine).join('\n')}\n</Mneme·${title}>`;
 }
 
-function renderEntryGist(entry: MemoryEntry): string {
-  const gist = entry.summary.length > 48 ? `${entry.summary.slice(0, 48)}…` : entry.summary;
-  return `· ${gist}`;
-}
 
 export function defaultSummaryPrompt(): string {
   return [
@@ -60,6 +56,9 @@ function buildInstruction(state: MnemeState, settings: MnemeSettings): string {
     needSeal
       ? `- 本条是本卷第 ${size} 条，必须同时输出 "seal":{"title":"卷名","recap":"150-200字复盘"}。`
       : `- 当前卷已有 ${count - 1}/${size} 条。`,
+    settings.keepRecentTurns > 0
+      ? '- 更早的原始对话可能已被省略；请以本账本中的摘要为准，不要声称用户没说过。'
+      : '',
     '不要复述这段说明，不要把它写进正文。',
   ]
     .filter(Boolean)
@@ -116,13 +115,13 @@ export function buildInjection(
     },
   ];
 
-  const fullStart = Math.max(0, recent.length - settings.fullDetailTurns);
   recent.forEach((entry, index) => {
     sections.push({
       key: `recent-${entry.id}`,
-      text: index >= fullStart ? renderEntryLine(entry) : renderEntryGist(entry),
+      text: renderEntryLine(entry),
       priority: 50 + index,
-      required: false,
+      // 当前卷摘要始终完整注入，不参与预算裁剪
+      required: true,
     });
   });
 

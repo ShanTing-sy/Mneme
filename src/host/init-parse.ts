@@ -4,7 +4,7 @@ import { cloneData } from '../core/clone.ts';
 import { hashText } from '../core/hash.ts';
 import { normalizeParseResult } from '../core/parse-result.ts';
 import { getCtx } from './context.ts';
-import { store, commitState, flushState } from '../store/chat-state.ts';
+import { store, ensureStateForChat, commitState, flushState } from '../store/chat-state.ts';
 import { readSettings } from '../store/ui-settings.ts';
 import { panelState } from '../ui/panel-state.ts';
 import { refreshInjection } from './events.ts';
@@ -104,12 +104,14 @@ export async function runInitParse(options: {
   force?: boolean;
 }): Promise<void> {
   const ctx = getCtx();
-  if (!ctx || !store.state || running) return;
+  if (!ctx || !ctx.chatMetadata || running) return;
 
   // 没有选中角色时不解析，避免在酒馆首页白烧一次请求
   if (ctx.characterId === null || ctx.characterId === undefined) return;
 
-  const state = store.state;
+  const state = ensureStateForChat();
+  if (!state) return;
+
   const needBonds = options.bonds && (options.force || Object.keys(state.bonds).length === 0);
   const needTimeline = options.timeline && (options.force || !state.timeline);
   if (!needBonds && !needTimeline) return;
@@ -117,6 +119,10 @@ export async function runInitParse(options: {
   running = true;
   panelState.initRunning = true;
   panelState.initError = '';
+  panelState.initProgress = 5;
+  panelState.initStage = '读取角色卡与世界书…';
+
+  let progressTimer: ReturnType<typeof setInterval> | null = null;
 
   try {
     if (typeof ctx.generateRaw !== 'function') {
@@ -127,10 +133,20 @@ export async function runInitParse(options: {
     const context = await collectCharacterContext();
     const prompt = buildParsePrompt(context, { bonds: needBonds, timeline: needTimeline });
 
+    panelState.initProgress = 25;
+    panelState.initStage = `已收集 ${context.stats.entries} 条条目，等待模型返回…`;
+
     if (settings.debug) {
       console.info('[Mneme] init context stats', JSON.stringify(context.stats));
       console.info('[Mneme] init prompt', prompt.slice(0, 4000));
     }
+
+    // 单次 generateRaw 没有真实流式进度，这里用缓慢推进的估算值
+    progressTimer = setInterval(() => {
+      if (panelState.initProgress < 85) {
+        panelState.initProgress += 1;
+      }
+    }, 700);
 
     let raw: unknown;
     try {
@@ -154,6 +170,13 @@ export async function runInitParse(options: {
       });
     }
 
+    if (progressTimer) {
+      clearInterval(progressTimer);
+      progressTimer = null;
+    }
+    panelState.initProgress = 90;
+    panelState.initStage = '解析模型返回…';
+
     const rawText = String(raw ?? '');
     if (settings.debug) console.info('[Mneme] init raw', rawText.slice(0, 4000));
 
@@ -168,7 +191,7 @@ export async function runInitParse(options: {
       throw new Error(`模型没有返回可识别的羁绊（顶层字段：${keys}）`);
     }
 
-    const next = applyParsed(store.state, normalized, {
+    const next = applyParsed(state, normalized, {
       char: context.charName,
       worldBooks: context.worldBooks,
     });
@@ -176,10 +199,22 @@ export async function runInitParse(options: {
     commitState(next);
     refreshInjection();
     await flushState();
+
+    panelState.initProgress = 100;
+    panelState.initStage = '完成';
+    setTimeout(() => {
+      if (!panelState.initRunning) {
+        panelState.initProgress = 0;
+        panelState.initStage = '';
+      }
+    }, 1600);
   } catch (error: any) {
     panelState.initError = error?.message || String(error);
+    panelState.initProgress = 0;
+    panelState.initStage = '解析失败';
     console.warn('[Mneme] init parse failed', error);
   } finally {
+    if (progressTimer) clearInterval(progressTimer);
     running = false;
     panelState.initRunning = false;
   }

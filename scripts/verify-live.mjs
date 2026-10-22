@@ -153,6 +153,31 @@ async function main() {
 
     const mnemeBad = badResponses.filter((line) => line.includes('Mneme'));
     const mnemeErrors = errors.filter((line) => /mneme/i.test(line));
+    const trimResult = await evaluate(`(async () => {
+      const ctx = SillyTavern.getContext();
+      ctx.extensionSettings.mneme = { ...(ctx.extensionSettings.mneme ?? {}), keepRecentTurns: 2, enabled: true };
+      const prompt = [{ role: 'system', content: '系统提示' }];
+      for (let i = 1; i <= 10; i += 1) {
+        prompt.push({ role: 'user', content: '问题' + i });
+        prompt.push({ role: 'assistant', content: '回答' + i });
+      }
+      prompt.push({ role: 'system', content: '<Mneme·记录要求>账本</Mneme·记录要求>' });
+      const data = { prompt };
+      await ctx.eventSource.emit(ctx.eventTypes.GENERATE_AFTER_DATA, data, false);
+      const contents = data.prompt.map((m) => m.content);
+      return JSON.stringify({
+        length: data.prompt.length,
+        hasMemory: contents.some((c) => String(c).includes('Mneme·记录要求')),
+        has9: contents.includes('问题9'),
+        has1: contents.includes('问题1'),
+      });
+    })()`);
+    const trimmed = JSON.parse(trimResult);
+    check('真实事件链：保留记忆账本', trimmed.hasMemory, true);
+    check('真实事件链：保留最近对话', trimmed.has9, true);
+    check('真实事件链：移除旧对话', trimmed.has1, false);
+    check('真实事件链：消息数减少', trimmed.length, 6);
+
     check('Mneme 资源无 4xx', mnemeBad.length, 0);
     if (mnemeBad.length > 0) results.push('Mneme 失败资源：' + mnemeBad.join(' | '));
     check('无 Mneme 相关异常', mnemeErrors.length, 0);

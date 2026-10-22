@@ -5,8 +5,9 @@ import { hashText } from '../core/hash.ts';
 import { applyDelta } from '../core/reduce.ts';
 import { reconcileState } from '../core/reconcile.ts';
 import { buildInjection } from '../core/inject.ts';
+import { trimGenerateData } from '../core/trim-context.ts';
 import { getCtx } from './context.ts';
-import { store, loadFromChat, commitState, flushState } from '../store/chat-state.ts';
+import { store, loadFromChat, ensureStateForChat, commitState, flushState } from '../store/chat-state.ts';
 import { readSettings, reloadSettings } from '../store/ui-settings.ts';
 import { cloneData } from '../core/clone.ts';
 import { panelState } from '../ui/panel-state.ts';
@@ -40,6 +41,21 @@ export function initHost(retries = 40): void {
   ctx.eventSource.on(events.GENERATION_STARTED, () => {
     refreshInjection();
   });
+  ctx.eventSource.on(events.GENERATE_AFTER_DATA, (data: any) => {
+    const settings = readSettings();
+    if (!settings.enabled) return;
+    const removed = trimGenerateData(data, settings.keepRecentTurns);
+    if (settings.debug) {
+      console.info(
+        '[Mneme] after data',
+        JSON.stringify({
+          isArray: Array.isArray(data?.prompt),
+          length: Array.isArray(data?.prompt) ? data.prompt.length : null,
+          removed,
+        }),
+      );
+    }
+  });
 
   reloadSettings();
   loadFromChat();
@@ -50,11 +66,15 @@ export function initHost(retries = 40): void {
 export function refreshInjection(): void {
   const ctx = getCtx();
   if (!ctx) return;
+
+  // 页面加载时没有聊天会导致 state 为 null；切角色后也不一定补发 CHAT_CHANGED
+  ensureStateForChat();
+
   const settings = readSettings();
 
   if (!settings.enabled || !store.state) {
     try {
-      ctx.setExtensionPrompt('mneme', '', 0, 0, false, 0);
+      ctx.setExtensionPrompt('mneme', '', 1, 1, false, 0);
     } catch (error) {
       console.warn('[Mneme] clear injection failed', error);
     }
@@ -66,8 +86,20 @@ export function refreshInjection(): void {
     charName: ctx.characters?.[ctx.characterId]?.name || 'char',
   });
 
+  if (settings.debug) {
+    console.info(
+      '[Mneme] refresh',
+      JSON.stringify({
+        enabled: settings.enabled,
+        hasState: !!store.state,
+        length: text.length,
+        keepRecentTurns: settings.keepRecentTurns,
+      }),
+    );
+  }
+
   try {
-    ctx.setExtensionPrompt('mneme', text, 0, 0, false, 0);
+    ctx.setExtensionPrompt('mneme', text, 1, 1, false, 0);
   } catch (error) {
     console.warn('[Mneme] inject failed', error);
   }
@@ -75,7 +107,9 @@ export function refreshInjection(): void {
 
 export async function onMessageReceived(messageId: number, type: string): Promise<void> {
   const ctx = getCtx();
-  if (!ctx || !store.state) return;
+  if (!ctx || !ctx.chatMetadata) return;
+  const state = ensureStateForChat();
+  if (!state) return;
 
   // 角色开场白不是生成结果，不应被记为「模型漏写记忆」
   if (type === 'first_message' || type === 'command') return;
@@ -109,7 +143,7 @@ export async function onMessageReceived(messageId: number, type: string): Promis
           importance: 'normal',
         };
 
-  const result = applyDelta(store.state, delta, {
+  const result = applyDelta(state, delta, {
     messageId,
     swipeId,
     mesHash: hashText(cleanText),

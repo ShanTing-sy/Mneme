@@ -9,7 +9,7 @@ const settings: MnemeSettings = {
   volumeSize: 10,
   majorRetentionVolumes: 2,
   tokenBudget: 2000,
-  fullDetailTurns: 10,
+  keepRecentTurns: 10,
   directorView: 'current',
   autoInitBonds: true,
   autoTimeline: false,
@@ -127,7 +127,7 @@ test('uses a custom summary prompt when provided', () => {
   assert.match(fallback, /完整流畅的一段话/);
 });
 
-test('shortens entries older than fullDetailTurns', () => {
+test('keeps every current summary in full', () => {
   const state = createEmptyState();
   for (let i = 1; i <= 5; i += 1) {
     state.entries.push({
@@ -147,11 +147,36 @@ test('shortens entries older than fullDetailTurns', () => {
     });
   }
 
-  const text = buildInjection(state, { ...settings, fullDetailTurns: 2 }, deps);
-  assert.match(text, /尾部4/);
+  const text = buildInjection(state, { ...settings, keepRecentTurns: 2 }, deps);
+  assert.match(text, /尾部1/);
   assert.match(text, /尾部5/);
-  assert.doesNotMatch(text, /尾部1/);
-  assert.match(text, /第1条/);
+  assert.match(text, /更早的原始对话可能已被省略/);
+});
+
+test('never drops current summaries even under a tiny budget', () => {
+  const state = createEmptyState();
+  for (let i = 1; i <= 3; i += 1) {
+    state.entries.push({
+      id: `e${i}`,
+      messageId: i,
+      swipeId: 0,
+      mesHash: `h${i}`,
+      at: i,
+      storyTime: '',
+      location: '',
+      summary: `必须保留的摘要${i}`,
+      characters: [],
+      result: '',
+      importance: 'normal',
+      volume: 1,
+      source: 'model',
+    });
+  }
+
+  const text = buildInjection(state, { ...settings, tokenBudget: 1 }, deps);
+  assert.match(text, /必须保留的摘要1/);
+  assert.match(text, /必须保留的摘要2/);
+  assert.match(text, /必须保留的摘要3/);
 });
 
 test('keeps permanent memory even under a tiny budget', () => {

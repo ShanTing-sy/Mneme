@@ -7,7 +7,7 @@ const DEFAULTS: MnemeSettings = {
   volumeSize: 10,
   majorRetentionVolumes: 2,
   tokenBudget: 2000,
-  fullDetailTurns: 10,
+  keepRecentTurns: 10,
   directorView: 'current',
   autoInitBonds: true,
   autoTimeline: false,
@@ -43,9 +43,9 @@ export function mergeSettings(
     Math.round(Number(merged.majorRetentionVolumes) || 0),
   );
   merged.tokenBudget = Math.max(200, Math.round(Number(merged.tokenBudget) || 2000));
-  merged.fullDetailTurns = Math.min(
-    30,
-    Math.max(0, Math.round(Number(merged.fullDetailTurns) || 0)),
+  merged.keepRecentTurns = Math.min(
+    40,
+    Math.max(0, Math.round(Number(merged.keepRecentTurns) || 0)),
   );
   return merged;
 }

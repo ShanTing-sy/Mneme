@@ -1,6 +1,19 @@
 <template>
   <div class="mneme-tab-body">
-    <div v-if="panelState.initRunning" class="mneme-muted">正在解析角色卡与世界书……</div>
+    <div
+      v-if="panelState.initRunning || panelState.initProgress > 0"
+      class="mneme-progress"
+    >
+      <div class="mneme-progress-track">
+        <div
+          class="mneme-progress-fill"
+          :style="{ width: `${panelState.initProgress}%` }"
+        ></div>
+      </div>
+      <div class="mneme-progress-label">
+        {{ panelState.initStage || '解析中…' }} · {{ panelState.initProgress }}%
+      </div>
+    </div>
     <div v-if="panelState.initError" class="mneme-warn">解析失败：{{ panelState.initError }}</div>
 
     <div class="mneme-row">

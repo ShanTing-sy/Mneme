@@ -9,14 +9,18 @@ export const store = reactive<{ state: MnemeState | null; status: string }>({
 });
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let lastChatId: string | null | undefined = undefined;
 
 export function loadFromChat(): MnemeState | null {
   const ctx = getCtx();
   if (!ctx || !ctx.chatMetadata) {
     store.state = null;
     store.status = 'no-chat';
+    lastChatId = ctx?.chatId ?? null;
     return null;
   }
+
+  lastChatId = ctx.chatId ?? null;
 
   const raw = ctx.chatMetadata.mneme;
   const result = migrateState(raw);
@@ -32,6 +36,16 @@ export function loadFromChat(): MnemeState | null {
   store.state = result.state;
   store.status = result.status;
   return result.state;
+}
+
+/** 当前聊天变了就重载，防止切角色/切聊天后沿用上一份记忆。 */
+export function ensureStateForChat(): MnemeState | null {
+  const ctx = getCtx();
+  const chatId = ctx?.chatId ?? null;
+  if (lastChatId === undefined || chatId !== lastChatId) {
+    return loadFromChat();
+  }
+  return store.state;
 }
 
 export function commitState(next: MnemeState): void {
