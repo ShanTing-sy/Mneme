@@ -9,7 +9,7 @@ const DEFAULTS: MnemeSettings = {
   tokenBudget: 2000,
   keepRecentTurns: 10,
   directorView: 'current',
-  autoInitBonds: true,
+  autoInitBonds: false,
   autoTimeline: false,
   showMissingBadge: true,
   debug: false,
@@ -90,14 +90,24 @@ function persistSettings(next: MnemeSettings): void {
 
 export function reloadSettings(): void {
   const merged = readSettings();
-  if (!merged.ui.positioned) {
-    const next = mergeSettings(merged, { ui: centeredUi(merged.ui) });
-    Object.assign(settingsStore, next);
-    Object.assign(settingsStore.ui, next.ui);
-    persistSettings(next);
-    return;
+  let changed = false;
+
+  // 旧版本默认开启自动解析；一次性改为默认关闭，之后尊重用户选择
+  if (!merged.settingsVersion) {
+    merged.autoInitBonds = false;
+    merged.autoTimeline = false;
+    merged.settingsVersion = 1;
+    changed = true;
   }
+
+  if (!merged.ui.positioned) {
+    merged.ui = centeredUi(merged.ui);
+    changed = true;
+  }
+
   Object.assign(settingsStore, merged);
+  Object.assign(settingsStore.ui, merged.ui);
+  if (changed) persistSettings(merged);
 }
 
 export function updateSettings(patch: Partial<MnemeSettings>): void {

@@ -89,6 +89,19 @@ const PARSE_SCHEMA = {
 };
 
 let running = false;
+let abortRequested = false;
+
+export function stopInitParse(): void {
+  if (!running) return;
+  abortRequested = true;
+  panelState.initStage = '正在停止…';
+  const ctx = getCtx();
+  try {
+    void ctx?.eventSource?.emit(ctx.eventTypes.GENERATION_STOPPED);
+  } catch (error) {
+    console.warn('[Mneme] stop failed', error);
+  }
+}
 
 export function scheduleInitParse(): void {
   const settings = readSettings();
@@ -117,6 +130,7 @@ export async function runInitParse(options: {
   if (!needBonds && !needTimeline) return;
 
   running = true;
+  abortRequested = false;
   panelState.initRunning = true;
   panelState.initError = '';
   panelState.initProgress = 5;
@@ -131,6 +145,7 @@ export async function runInitParse(options: {
 
     const settings = readSettings();
     const context = await collectCharacterContext();
+    if (abortRequested) throw new Error('__mneme_stopped__');
     const prompt = buildParsePrompt(context, { bonds: needBonds, timeline: needTimeline });
 
     panelState.initProgress = 25;
@@ -169,6 +184,8 @@ export async function runInitParse(options: {
         responseLength: 1600,
       });
     }
+
+    if (abortRequested) throw new Error('__mneme_stopped__');
 
     if (progressTimer) {
       clearInterval(progressTimer);
@@ -209,13 +226,20 @@ export async function runInitParse(options: {
       }
     }, 1600);
   } catch (error: any) {
-    panelState.initError = error?.message || String(error);
-    panelState.initProgress = 0;
-    panelState.initStage = '解析失败';
-    console.warn('[Mneme] init parse failed', error);
+    if (abortRequested) {
+      panelState.initError = '';
+      panelState.initProgress = 0;
+      panelState.initStage = '已停止';
+    } else {
+      panelState.initError = error?.message || String(error);
+      panelState.initProgress = 0;
+      panelState.initStage = '解析失败';
+      console.warn('[Mneme] init parse failed', error);
+    }
   } finally {
     if (progressTimer) clearInterval(progressTimer);
     running = false;
+    abortRequested = false;
     panelState.initRunning = false;
   }
 }

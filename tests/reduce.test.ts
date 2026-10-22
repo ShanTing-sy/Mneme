@@ -23,6 +23,32 @@ test('creates an entry and a bond event', () => {
   assert.equal(bondScore(r.state.bonds['甲']), 3);
 });
 
+test('strips 涉及/锚点 lines from the summary body', () => {
+  const r = applyDelta(
+    createEmptyState(),
+    {
+      summary: '正文第一句。\n涉及：甲\n锚点：指尖停在书脊上。\n正文第二句。',
+      importance: 'major',
+      characters: ['甲'],
+      anchor: '指尖停在书脊上',
+    },
+    meta,
+  );
+  assert.equal(r.state.entries[0].summary, '正文第一句。\n正文第二句。');
+  assert.deepEqual(r.state.entries[0].characters, ['甲']);
+  assert.equal(r.state.entries[0].anchor, '指尖停在书脊上');
+});
+
+test('normal entries drop characters and anchor', () => {
+  const r = applyDelta(
+    createEmptyState(),
+    { summary: '普通的一天。', characters: ['甲'], anchor: '某个细节' },
+    meta,
+  );
+  assert.deepEqual(r.state.entries[0].characters, []);
+  assert.equal(r.state.entries[0].anchor, undefined);
+});
+
 test('same message and swipe replaces rather than appends', () => {
   const first = applyDelta(createEmptyState(), { summary: '第一版' }, meta);
   const second = applyDelta(first.state, { summary: '第二版' }, meta);

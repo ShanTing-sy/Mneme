@@ -25,6 +25,7 @@ export interface MemoryEntry {
 export interface Volume {
   index: number;
   title: string;
+  timeRange: string;
   recap: string;
   entries: MemoryEntry[];
   sealedAt: number;
@@ -106,6 +107,7 @@ export interface MnemeUi {
 }
 
 export interface MnemeSettings {
+  settingsVersion?: number;
   enabled: boolean;
   volumeSize: number;
   majorRetentionVolumes: number;
@@ -138,6 +140,9 @@ export interface DeltaItem {
 
 export interface DeltaSeal {
   title?: string;
+  timeRange?: string;
+  time_range?: string;
+  time?: string;
   recap?: string;
 }
 

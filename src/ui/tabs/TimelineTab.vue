@@ -23,6 +23,22 @@
       <button class="mneme-btn" @click="parseBonds" :disabled="panelState.initRunning">
         仅解析初始羁绊
       </button>
+      <button
+        v-if="panelState.initRunning"
+        class="mneme-btn mneme-btn-sm mneme-btn-danger"
+        @click="stop"
+      >
+        停止
+      </button>
+    </div>
+    <div v-if="panelState.initRunning" class="mneme-muted">
+      解析在后台继续，切换标签或关闭面板不会中断。
+    </div>
+    <div
+      v-if="!panelState.initRunning && panelState.initStage === '已停止'"
+      class="mneme-muted"
+    >
+      已停止当前解析。
     </div>
 
     <div v-if="!state" class="mneme-empty">当前没有打开的聊天。</div>
@@ -97,7 +113,7 @@ import { cloneData } from '../../core/clone.ts';
 import { store, commitState, flushState } from '../../store/chat-state.ts';
 import { settingsStore, updateSettings } from '../../store/ui-settings.ts';
 import { panelState } from '../panel-state.ts';
-import { runInitParse } from '../../host/init-parse.ts';
+import { runInitParse, stopInitParse } from '../../host/init-parse.ts';
 import { refreshInjection } from '../../host/events.ts';
 import { getCtx } from '../../host/context.ts';
 
@@ -143,6 +159,10 @@ function generate(): void {
 
 function parseBonds(): void {
   void runInitParse({ bonds: true, timeline: false, force: true });
+}
+
+function stop(): void {
+  stopInitParse();
 }
 
 function setView(value: string): void {

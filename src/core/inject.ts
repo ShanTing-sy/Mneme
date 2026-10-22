@@ -32,11 +32,13 @@ export function defaultSummaryPrompt(): string {
   return [
     '在正文结束后，另起一行输出一个 HTML 注释块，且只输出这一个块：',
     '<!--MNEME',
-    '{"summary":"…","storyTime":"…","location":"…","characters":["…"],"result":"…","importance":"normal|major|permanent","bonds":[],"items":[]}',
+    '{"summary":"…","storyTime":"…","location":"…","characters":[],"importance":"normal|major|permanent","bonds":[],"items":[]}',
     'MNEME-->',
-    '- summary：完整流畅的一段话，客观记录本轮发生了什么（谁、在哪、做了什么、结果），25–100 字。',
-    '- importance：仅当出现“第一次”“人格改变”“强烈情绪事件”时才用 major 或 permanent；其余一律 normal。',
+    '- summary：一段紧凑流畅的话，客观记录本轮发生了什么，**把结果也写进这段话里**，25–60 字；不要单独输出 result 字段。',
+    '- importance：只有大场面、剧情转折、“第一次”“人格改变”“强烈情绪事件”才用 major 或 permanent；普通日常一律 normal。',
+    '- importance 为 normal 时，不要输出 anchor 和 characters；这两个字段只属于大场面。',
     '- anchor：仅 major/permanent 填写，写一个具体的感知细节。',
+    '- characters：仅 major/permanent 或多人同场时填写。',
     '- bonds：本轮好感变化，delta 为 -20~20 的整数；event 写触发变化的事；只有印象变化时才写 impression。',
     '- items：action 为 gain/lose/consume/change。',
   ].join('\n');
@@ -54,7 +56,7 @@ function buildInstruction(state: MnemeState, settings: MnemeSettings): string {
       ? '- plot：仅在剧情节点推进时填写，advance 为已完成的节点 id，current 为进入的节点 id。'
       : '',
     needSeal
-      ? `- 本条是本卷第 ${size} 条，必须同时输出 "seal":{"title":"卷名","recap":"150-200字复盘"}。`
+      ? `- 本条是本卷第 ${size} 条，必须同时输出 "seal":{"title":"卷名","timeRange":"本卷时间跨度","recap":"150-200字复盘"}。`
       : `- 当前卷已有 ${count - 1}/${size} 条。`,
     settings.keepRecentTurns > 0
       ? '- 更早的原始对话可能已被省略；请以本账本中的摘要为准，不要声称用户没说过。'
@@ -134,7 +136,12 @@ export function buildInjection(
 
   const recaps = state.volumes
     .slice(-3)
-    .map((volume) => `第${volume.index}卷·${volume.title}：${volume.recap}`)
+    .map(
+      (volume) =>
+        `第${volume.index}卷·【${volume.title}】${
+          volume.timeRange ? `【${volume.timeRange}】` : ''
+        }${volume.recap}`,
+    )
     .join('\n');
   sections.push({
     key: 'volumes',

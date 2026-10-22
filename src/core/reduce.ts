@@ -34,6 +34,15 @@ function ensureBond(state: MnemeState, name: string, now: number): Bond {
   return state.bonds[name];
 }
 
+function cleanSummary(summary: string): string {
+  const lines = String(summary ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const filtered = lines.filter((line) => !/^(涉及|锚点)[：:]/.test(line));
+  return (filtered.length > 0 ? filtered : lines).join('\n').trim();
+}
+
 export function applyDelta(state: MnemeState, delta: Delta, meta: DeltaMeta): ApplyResult {
   const now = meta.now ?? Date.now();
   const next = cloneData(state);
@@ -48,6 +57,9 @@ export function applyDelta(state: MnemeState, delta: Delta, meta: DeltaMeta): Ap
   next.entries = next.entries.filter((entry) => entry.id !== entryId);
   removeEntryLinks(next, [entryId]);
 
+  const importance = delta.importance ?? 'normal';
+  const simpleEntry = importance === 'normal';
+
   const entry: MemoryEntry = {
     id: entryId,
     messageId: meta.messageId,
@@ -56,11 +68,11 @@ export function applyDelta(state: MnemeState, delta: Delta, meta: DeltaMeta): Ap
     at: now,
     storyTime: delta.storyTime ?? '',
     location: delta.location ?? '',
-    summary: (delta.summary ?? '').trim() || '（模型未提供摘要）',
-    characters: delta.characters ?? [],
+    summary: cleanSummary(delta.summary) || '（模型未提供摘要）',
+    characters: simpleEntry ? [] : (delta.characters ?? []),
     result: delta.result ?? '',
-    importance: delta.importance ?? 'normal',
-    anchor: delta.anchor,
+    importance,
+    anchor: simpleEntry ? undefined : delta.anchor,
     volume: next.stats.sealedVolumes + 1,
     source: 'model',
   };

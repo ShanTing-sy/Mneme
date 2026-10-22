@@ -124,7 +124,7 @@ test('uses a custom summary prompt when provided', () => {
   assert.doesNotMatch(text, /完整流畅的一段话/);
 
   const fallback = buildInjection(state, { ...settings, summaryPrompt: '   ' }, deps);
-  assert.match(fallback, /完整流畅的一段话/);
+  assert.match(fallback, /紧凑流畅/);
 });
 
 test('keeps every current summary in full', () => {

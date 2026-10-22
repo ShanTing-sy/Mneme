@@ -270,12 +270,18 @@ MNEME-->
 ### 6.1 记忆系统
 
 - 一条 AI 回复 = 一条摘要。群聊同样按一次生成算一条。
+- 摘要 25–60 字，**结果直接写进这段话里**，不再单独输出 `result` 字段。
+- `characters` 与 `anchor` 只在大场面 / `major` / `permanent` 时填写；普通日常可以省略。
+- 面板中每条摘要是一个可折叠的 `<details>`：第一行显示 `#N`、重要度、编辑、删除；第二行单独显示时间与地点；展开后显示摘要正文、涉及角色、锚点（后两者各自独立成行，不混进摘要）。
+- 摘要、时间、地点、重要度可直接在面板里手动编辑；改成普通时自动清空涉及与锚点。
+- `normal` 条目不会保留、也不会显示涉及与锚点，只有 `major` / `permanent` 才有。
 - `permanent` 条目永不退出注入窗口。
 - `major` 条目在封卷后继续注入若干卷（默认 2 卷，设置项 `majorRetentionVolumes`）。
 - `normal` 条目随卷封存自然淡出。
 - 当前卷条数达到 n（默认 10）时封卷：
-  - 增量中带 `seal` → 采用模型的标题与复盘。
+  - 增量中带 `seal` → 采用模型的标题、时间跨度与复盘。
   - 缺 `seal` → 插件用这 n 条摘要机械拼成复盘，`auto: true`，标题 `第 X 卷`。
+  - 卷宗展示格式：`【卷名】【时间跨度】+ 压缩后的内容`；时间跨度优先用模型给的 `seal.timeRange`，否则取本卷首尾条目的 `storyTime`。
 - swipe 重生成 → 以 `messageId + swipeId` 替换原条目，不追加。
 - 编辑消息 → 若新正文仍含增量块则重解析替换；否则标记条目 `stale`（UI 灰显），不自动删除。
 - 删除消息 → 酒馆的消息索引会整体前移，因此不能只按 `messageId` 对账。插件用「正文指纹」重对齐：指纹仍存在的条目改绑新的 `messageId`；指纹消失的条目连同其羁绊事件、道具记录一起删除；好感度自动回算。
@@ -296,9 +302,12 @@ MNEME-->
 
 ### 6.4 剧情线
 
-- 解析来源：角色卡 `name / description / personality / scenario / first_mes / system_prompt / post_history_instructions` + 角色卡绑定世界书 + 全局启用世界书（面板可勾选）。
+- 解析来源：角色卡 `name / description / personality / scenario / first_mes / system_prompt / post_history_instructions` + **卡内世界书 `data.character_book`** + 角色卡绑定世界书 + 面板勾选的世界书；按剧情关键词筛选并截断，避免把整本世界书塞进提示词。
 - 通过 `generateRaw({ systemPrompt, prompt, jsonSchema })` 一次生成 6–12 个节点。
-- 自动生成开关默认关闭；开启后在新聊天后台静默运行，完成后按钮显示绿点。失败保留重试入口。
+- **初始羁绊解析与剧情线解析默认关闭**，由用户在「剧情线」标签手动点按钮触发；设置里可分别开启「新聊天自动解析」。
+- 解析中显示阶段进度条与百分比（估算值）：读取资料 → 等待模型 → 解析结果 → 完成。
+- 解析在后台运行，切换标签或关闭面板不会中断；按钮右侧有「停止」，点击终止当前解析。
+- 失败保留重试入口，并显示可识别的错误原因。
 - 面板中默认整体折叠（防剧透），可逐节点展开。
 - 节点状态由模型通过 `plot.advance` / `plot.current` 回报推进。
 - 导演视野四档，默认「当前节点」：
@@ -368,7 +377,7 @@ div.extension_container
 
 | 标签 | 内容 |
 |---|---|
-| 记忆 | 当前卷条目列表（时间、地点、摘要、角色、重要度角标）、已封卷宗折叠列表、搜索、手动新增、重新整理 |
+| 记忆 | 当前卷条目列表（每条可折叠：第一行 `#N`、重要度、删除；第二行时间地点；展开后是摘要/涉及/锚点）、已封卷宗折叠列表、搜索、手动新增、提示词编辑 |
 | 羁绊 | 角色卡（头像、好感条、分段标签、印象、重要事件）、手动加减、编辑印象 |
 | 道具 | 道具列表（名称、来源、作用、状态）、新增、改状态、删除 |
 | 剧情线 | 解析来源勾选、生成/重新解析按钮、默认折叠的节点列表、当前节点高亮 |
@@ -391,7 +400,7 @@ interface MnemeSettings {
   tokenBudget: number;             // 默认 2000
   keepRecentTurns: number;         // 生成前裁剪原始对话，保留最近 N 轮，默认 10；摘要始终完整注入
   directorView: 'current' | 'current-next' | 'volume' | 'full';  // 默认 current
-  autoInitBonds: boolean;          // 新聊天自动解析初始羁绊，默认 true
+  autoInitBonds: boolean;          // 新聊天自动解析初始羁绊，默认 false
   autoTimeline: boolean;           // 新聊天自动生成时间轴，默认 false
   showMissingBadge: boolean;       // 模型未吐块时提示，默认 true
   debug: boolean;                  // 面板显示原始增量，默认 false

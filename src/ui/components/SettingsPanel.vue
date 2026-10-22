@@ -39,8 +39,20 @@
         min="0"
         max="40"
         :value="settingsStore.keepRecentTurns"
+        list="mneme-turn-presets"
         @change="patchNumber('keepRecentTurns', $event)"
       />
+      <datalist id="mneme-turn-presets">
+        <option value="0"></option>
+        <option value="3"></option>
+        <option value="5"></option>
+        <option value="8"></option>
+        <option value="10"></option>
+        <option value="15"></option>
+        <option value="20"></option>
+        <option value="30"></option>
+        <option value="40"></option>
+      </datalist>
     </label>
     <p class="mneme-muted">
       仅对聊天补全接口生效；系统提示与记忆账本始终保留，摘要不受影响。

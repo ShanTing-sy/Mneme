@@ -203,11 +203,17 @@ async function main() {
           entries: [{
             id: 'demo-e1', messageId: 1, swipeId: 0, mesHash: 'h', at: Date.now(),
             storyTime: '傍晚', location: '旧书店',
-            summary: '她在雨里抬头看了你一眼，指尖停在书脊上。',
-            characters: ['甲'], result: '约定明天再见', importance: 'major',
+            summary: '她在雨里抬头看了你一眼，指尖停在书脊上，两人约定明天再见。',
+            characters: ['甲'], result: '', importance: 'major',
             anchor: '指尖停在书脊上', volume: 1, source: 'model'
           }],
-          volumes: [],
+          volumes: [
+            {
+              index: 1, title: '雨与灰烬', timeRange: '第一日 ～ 第三日',
+              recap: '三天的雨把两个人困在同一间书店里。从互相试探，到愿意说起各自的过去。',
+              entries: [], sealedAt: Date.now(), auto: false
+            }
+          ],
           bonds: {
             '甲': {
               name: '甲', initialScore: 35, manualDelta: 0,

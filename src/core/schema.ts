@@ -27,6 +27,7 @@ const MemoryEntrySchema = z.object({
 const VolumeSchema = z.object({
   index: z.number().int(),
   title: z.string().default(''),
+  timeRange: z.string().default(''),
   recap: z.string().default(''),
   entries: z.array(MemoryEntrySchema).default([]),
   sealedAt: z.number().default(0),

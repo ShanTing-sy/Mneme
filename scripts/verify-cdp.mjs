@@ -265,6 +265,24 @@ async function main() {
       true,
     );
 
+    // 摘要手动编辑
+    await evaluate(
+      "Array.from(document.querySelectorAll('.mneme-entry-summary button')).find((b) => b.textContent.trim() === '编辑').click(); 'ok'",
+    );
+    await sleep(200);
+    await evaluate(
+      "(() => { const t = document.querySelector('.mneme-entry-edit textarea'); t.value = '手动修改后的摘要'; t.dispatchEvent(new Event('input', { bubbles: true })); return 'ok'; })()",
+    );
+    await evaluate(
+      "Array.from(document.querySelectorAll('.mneme-entry-edit button')).find((b) => b.textContent.trim() === '保存').click(); 'ok'",
+    );
+    await sleep(500);
+    check(
+      '摘要可手动修改',
+      await evaluate("window.__ctx.chatMetadata.mneme.entries[0].summary"),
+      '手动修改后的摘要',
+    );
+
     await evaluate("document.querySelectorAll('.mneme-tab')[1].click(); 'ok'");
     await sleep(200);
     check(
