@@ -1,0 +1,6 @@
+node_modules/
+dist/*.map
+docs/screenshots/
+参考思路/
+.DS_Store
+*.log
