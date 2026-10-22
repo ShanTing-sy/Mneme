@@ -110,6 +110,7 @@ export interface MnemeSettings {
   volumeSize: number;
   majorRetentionVolumes: number;
   tokenBudget: number;
+  fullDetailTurns: number;
   directorView: DirectorView;
   autoInitBonds: boolean;
   autoTimeline: boolean;

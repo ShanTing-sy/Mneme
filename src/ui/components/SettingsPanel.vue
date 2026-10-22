@@ -32,6 +32,18 @@
     </label>
 
     <label class="mneme-field">
+      <span>完整摘要保留条数</span>
+      <input
+        class="mneme-input"
+        type="number"
+        min="0"
+        max="30"
+        :value="settingsStore.fullDetailTurns"
+        @change="patchNumber('fullDetailTurns', $event)"
+      />
+    </label>
+
+    <label class="mneme-field">
       <span>重要记忆保留卷数</span>
       <input
         class="mneme-input"
@@ -165,7 +177,10 @@ function patch<K extends keyof typeof settingsStore>(key: K, value: unknown): vo
   refreshInjection();
 }
 
-function patchNumber(key: 'volumeSize' | 'tokenBudget' | 'majorRetentionVolumes', event: Event): void {
+function patchNumber(
+  key: 'volumeSize' | 'tokenBudget' | 'majorRetentionVolumes' | 'fullDetailTurns',
+  event: Event,
+): void {
   const value = Number((event.target as HTMLInputElement).value) || 0;
   updateSettings({ [key]: value } as any);
 }

@@ -387,6 +387,7 @@ interface MnemeSettings {
   volumeSize: number;              // 默认 10，范围 5–30
   majorRetentionVolumes: number;   // major 条目封卷后继续注入的卷数，默认 2
   tokenBudget: number;             // 默认 2000
+  fullDetailTurns: number;         // 最近 N 条保留完整摘要，更早的压成一句，默认 10
   directorView: 'current' | 'current-next' | 'volume' | 'full';  // 默认 current
   autoInitBonds: boolean;          // 新聊天自动解析初始羁绊，默认 true
   autoTimeline: boolean;           // 新聊天自动生成时间轴，默认 false
@@ -502,6 +503,15 @@ interface MnemeSettings {
 - 说明页与设置页的返回 `←` 与关闭 `×` 固定在面板头部，不随内容滚动。
 - 记忆区「新增」「删除」按钮缩小；「新增」右侧新增「提示词」按钮，可直接编辑摘要生成提示词（留空用默认，保存后立即重建注入）。
 - 新增设置项 `summaryPrompt`。
+
+### 剧情线解析修复
+
+- 来源扩展为三处：角色卡**内嵌世界书** `data.character_book`、角色卡绑定世界书 `data.extensions.world`、用户在面板勾选的世界书。三处去重后合并。
+- 按剧情关键词（剧情/事件/主线/伏笔/时间轴/章节/结局/真相/plot/story/timeline 等）筛选；剧情条目最多 24 条、每条 1200 字，常驻设定最多 8 条、每条 500 字，总量上限 14000 字。
+- 解析结果兼容模型常见的变体：`plot_timeline` / `timeline` / `nodes` / 顶层数组；节点字段兼容 `description`、`stage`、`node_id`；未知类型归为主线、分支类归为支线。
+- 提示词里直接给出 JSON 骨架，不再只依赖 `jsonSchema`；后端不支持 `jsonSchema` 时自动重试一次纯提示词。
+- 无法识别时明确报错并在面板显示顶层字段名，不再静默失败。
+- 新增 `fullDetailTurns`：当前卷中超出最近 N 条的摘要只注入一句缩写，节省 token。
 
 ---
 

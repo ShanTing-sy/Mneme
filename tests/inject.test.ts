@@ -9,6 +9,7 @@ const settings: MnemeSettings = {
   volumeSize: 10,
   majorRetentionVolumes: 2,
   tokenBudget: 2000,
+  fullDetailTurns: 10,
   directorView: 'current',
   autoInitBonds: true,
   autoTimeline: false,
@@ -124,6 +125,33 @@ test('uses a custom summary prompt when provided', () => {
 
   const fallback = buildInjection(state, { ...settings, summaryPrompt: '   ' }, deps);
   assert.match(fallback, /完整流畅的一段话/);
+});
+
+test('shortens entries older than fullDetailTurns', () => {
+  const state = createEmptyState();
+  for (let i = 1; i <= 5; i += 1) {
+    state.entries.push({
+      id: `e${i}`,
+      messageId: i,
+      swipeId: 0,
+      mesHash: `h${i}`,
+      at: i,
+      storyTime: '',
+      location: '',
+      summary: `第${i}条` + '甲'.repeat(60) + `尾部${i}`,
+      characters: [],
+      result: '',
+      importance: 'normal',
+      volume: 1,
+      source: 'model',
+    });
+  }
+
+  const text = buildInjection(state, { ...settings, fullDetailTurns: 2 }, deps);
+  assert.match(text, /尾部4/);
+  assert.match(text, /尾部5/);
+  assert.doesNotMatch(text, /尾部1/);
+  assert.match(text, /第1条/);
 });
 
 test('keeps permanent memory even under a tiny budget', () => {

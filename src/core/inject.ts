@@ -27,6 +27,11 @@ function renderEntries(entries: MemoryEntry[], title: string): string {
   return `<Mneme·${title}>\n${entries.map(renderEntryLine).join('\n')}\n</Mneme·${title}>`;
 }
 
+function renderEntryGist(entry: MemoryEntry): string {
+  const gist = entry.summary.length > 48 ? `${entry.summary.slice(0, 48)}…` : entry.summary;
+  return `· ${gist}`;
+}
+
 export function defaultSummaryPrompt(): string {
   return [
     '在正文结束后，另起一行输出一个 HTML 注释块，且只输出这一个块：',
@@ -111,10 +116,11 @@ export function buildInjection(
     },
   ];
 
+  const fullStart = Math.max(0, recent.length - settings.fullDetailTurns);
   recent.forEach((entry, index) => {
     sections.push({
       key: `recent-${entry.id}`,
-      text: renderEntryLine(entry),
+      text: index >= fullStart ? renderEntryLine(entry) : renderEntryGist(entry),
       priority: 50 + index,
       required: false,
     });

@@ -7,6 +7,12 @@ test('extractJson handles fenced output', async () => {
   assert.equal(extractJson('前言 {"a":1} 后记'), '{"a":1}');
 });
 
+test('extractJson handles a bare array', async () => {
+  const { extractJson } = await import('../src/host/init-parse.ts');
+  assert.equal(extractJson('[{"title":"A"}]'), '[{"title":"A"}]');
+  assert.equal(extractJson('说明\n[{"title":"A"}]\n结束'), '[{"title":"A"}]');
+});
+
 test('applyParsed creates bonds and timeline nodes without overwriting existing bonds', async () => {
   const { applyParsed } = await import('../src/host/init-parse.ts');
   const { createEmptyState } = await import('../src/core/schema.ts');
