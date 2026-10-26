@@ -157,6 +157,125 @@
       <button class="mneme-btn" @click="resetPosition">重置面板位置与尺寸</button>
     </div>
 
+    <div class="mneme-section-title">悬浮球</div>
+
+    <label class="mneme-field">
+      <span>中心内容（文字 / emoji）</span>
+      <input
+        class="mneme-input"
+        data-mneme="ballText"
+        maxlength="4"
+        placeholder="M"
+        :value="settingsStore.ui.ballText"
+        @change="patchUiText('ballText', $event)"
+      />
+    </label>
+
+    <label class="mneme-field">
+      <span>图标图片 URL（可选）</span>
+      <input
+        class="mneme-input"
+        data-mneme="ballImage"
+        placeholder="留空则显示文字"
+        :value="settingsStore.ui.ballImage"
+        @change="patchUiText('ballImage', $event)"
+      />
+    </label>
+
+    <label class="mneme-field">
+      <span>尺寸（px）</span>
+      <input
+        class="mneme-input"
+        data-mneme="ballSize"
+        type="number"
+        min="32"
+        max="72"
+        :value="settingsStore.ui.ballSize"
+        @change="patchUiNumber('ballSize', $event, 44)"
+      />
+    </label>
+
+    <label class="mneme-field">
+      <span>不透明度</span>
+      <input
+        class="mneme-input"
+        data-mneme="ballOpacity"
+        type="number"
+        min="0.2"
+        max="1"
+        step="0.05"
+        :value="settingsStore.ui.ballOpacity"
+        @change="patchUiNumber('ballOpacity', $event, 1)"
+      />
+    </label>
+
+    <label class="mneme-field">
+      <span>透明背景</span>
+      <input
+        data-mneme="ballBgTransparent"
+        type="checkbox"
+        :checked="settingsStore.ui.ballBgTransparent"
+        @change="patchUi('ballBgTransparent', checked($event))"
+      />
+    </label>
+
+    <label v-if="!settingsStore.ui.ballBgTransparent" class="mneme-field">
+      <span>背景色</span>
+      <input
+        class="mneme-input"
+        data-mneme="ballBg"
+        type="color"
+        :value="settingsStore.ui.ballBg"
+        @change="patchUi('ballBg', ($event.target as HTMLInputElement).value)"
+      />
+    </label>
+
+    <label class="mneme-field">
+      <span>显示边框</span>
+      <input
+        data-mneme="ballBorder"
+        type="checkbox"
+        :checked="settingsStore.ui.ballBorder"
+        @change="patchUi('ballBorder', checked($event))"
+      />
+    </label>
+
+    <label v-if="settingsStore.ui.ballBorder" class="mneme-field">
+      <span>边框颜色</span>
+      <input
+        class="mneme-input"
+        data-mneme="ballBorderColor"
+        type="color"
+        :value="settingsStore.ui.ballBorderColor"
+        @change="patchUi('ballBorderColor', ($event.target as HTMLInputElement).value)"
+      />
+    </label>
+
+    <label class="mneme-field">
+      <span>文字 / 图案颜色</span>
+      <input
+        class="mneme-input"
+        data-mneme="ballColor"
+        type="color"
+        :value="settingsStore.ui.ballColor"
+        @change="patchUi('ballColor', ($event.target as HTMLInputElement).value)"
+      />
+    </label>
+
+    <label class="mneme-field">
+      <span>贴边时只露一半</span>
+      <input
+        data-mneme="ballHalfHide"
+        type="checkbox"
+        :checked="settingsStore.ui.ballHalfHide"
+        @change="patchUi('ballHalfHide', checked($event))"
+      />
+    </label>
+
+    <div class="mneme-row">
+      <button class="mneme-btn" @click="resetBallStyle">恢复悬浮球默认样式</button>
+    </div>
+
     <div class="mneme-section-title">数据</div>
     <div class="mneme-row">
       <button class="mneme-btn" @click="exportJson">导出当前聊天记忆</button>
@@ -204,9 +323,32 @@ function patchUi(key: keyof MnemeUi, value: unknown): void {
   updateSettings({ ui: { ...settingsStore.ui, [key]: value } });
 }
 
-function patchUiNumber(key: keyof MnemeUi, event: Event): void {
-  const value = Number((event.target as HTMLInputElement).value) || 14;
-  patchUi(key, value);
+function patchUiNumber(key: keyof MnemeUi, event: Event, fallback = 14): void {
+  const value = Number((event.target as HTMLInputElement).value);
+  patchUi(key, Number.isFinite(value) ? value : fallback);
+}
+
+function patchUiText(key: 'ballText' | 'ballImage', event: Event): void {
+  const value = (event.target as HTMLInputElement).value;
+  patchUi(key, key === 'ballText' ? value.slice(0, 8) : value.trim());
+}
+
+function resetBallStyle(): void {
+  updateSettings({
+    ui: {
+      ...settingsStore.ui,
+      ballText: 'M',
+      ballImage: '',
+      ballSize: 44,
+      ballOpacity: 1,
+      ballBgTransparent: true,
+      ballBg: '#1a1a1e',
+      ballBorder: false,
+      ballBorderColor: '#b08d57',
+      ballColor: '#b08d57',
+      ballHalfHide: true,
+    },
+  });
 }
 
 function resetPosition(): void {

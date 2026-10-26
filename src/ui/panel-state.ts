@@ -14,6 +14,10 @@ export const panelState = reactive({
   initStage: '',
   initError: '',
   lastSealed: 0,
+  overviewOpen: false,
+  ballDot: false,
+  trimmedLast: 0,
+  trimmedAt: 0,
 });
 
 export function togglePanel(value?: boolean): void {

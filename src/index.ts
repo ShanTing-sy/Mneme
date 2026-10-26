@@ -1,7 +1,7 @@
 import './global.css';
 import './ui/styles.css';
 import { createApp } from 'vue';
-import Panel from './ui/Panel.vue';
+import App from './ui/App.vue';
 import { initHost } from './host/events.ts';
 import { ensureWandButton, setWandDot } from './host/wand.ts';
 import { togglePanel } from './ui/panel-state.ts';
@@ -13,7 +13,7 @@ function boot(): void {
   const root = document.createElement('div');
   root.id = 'mneme-root';
   document.body.appendChild(root);
-  createApp(Panel).mount(root);
+  createApp(App).mount(root);
 
   ensureWandButton(() => {
     setWandDot(false);

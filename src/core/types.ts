@@ -104,6 +104,20 @@ export interface MnemeUi {
   minimized: boolean;
   fontSize: number;
   positioned?: boolean;
+  ballVisible: boolean;
+  ballX?: number;
+  ballY?: number;
+  ballPositioned?: boolean;
+  ballText: string;
+  ballImage: string;
+  ballSize: number;
+  ballOpacity: number;
+  ballBgTransparent: boolean;
+  ballBg: string;
+  ballBorder: boolean;
+  ballBorderColor: string;
+  ballColor: string;
+  ballHalfHide: boolean;
 }
 
 export interface MnemeSettings {

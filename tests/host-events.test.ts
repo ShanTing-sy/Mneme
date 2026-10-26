@@ -17,6 +17,7 @@ function installFakeContext() {
       MESSAGE_DELETED: 'message_deleted',
       CHAT_CHANGED: 'chat_changed',
       GENERATION_STARTED: 'generation_started',
+      GENERATE_AFTER_DATA: 'generate_after_data',
     },
     eventSource: {
       on(event: string, handler: Function) {
@@ -76,4 +77,35 @@ test('keeps a raw entry when JSON is broken but the block exists', async () => {
   assert.equal(ctx.chat[0].mes, '正文');
   assert.equal(ctx.chatMetadata.mneme.entries.length, 1);
   assert.equal(ctx.chatMetadata.mneme.entries[0].source, 'raw');
+});
+
+test('记录裁剪条数并在切换聊天时重置会话计数', async () => {
+  const { handlers } = installFakeContext();
+  const { initHost } = await import('../src/host/events.ts');
+  const { panelState } = await import('../src/ui/panel-state.ts');
+
+  initHost();
+
+  const prompt: Array<{ role: string; content: string }> = [
+    { role: 'system', content: '<Mneme·记录要求>账本</Mneme·记录要求>' },
+  ];
+  for (let i = 1; i <= 15; i += 1) {
+    prompt.push({ role: 'user', content: '问题' + i });
+    prompt.push({ role: 'assistant', content: '回答' + i });
+  }
+  handlers['generate_after_data'][0]({ prompt });
+
+  assert.equal(panelState.trimmedLast, 10);
+  assert.ok(panelState.trimmedAt > 0);
+
+  panelState.missing = 3;
+  panelState.raw = 2;
+  panelState.ballDot = true;
+  await handlers['chat_changed'][0]();
+
+  assert.equal(panelState.missing, 0);
+  assert.equal(panelState.raw, 0);
+  assert.equal(panelState.trimmedLast, 0);
+  assert.equal(panelState.trimmedAt, 0);
+  assert.equal(panelState.ballDot, false);
 });

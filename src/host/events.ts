@@ -45,6 +45,8 @@ export function initHost(retries = 40): void {
     const settings = readSettings();
     if (!settings.enabled) return;
     const removed = trimGenerateData(data, settings.keepRecentTurns);
+    panelState.trimmedLast = removed;
+    panelState.trimmedAt = Date.now();
     if (settings.debug) {
       console.info(
         '[Mneme] after data',
@@ -127,6 +129,7 @@ export async function onMessageReceived(messageId: number, type: string): Promis
     if (settings.showMissingBadge) {
       panelState.missing += 1;
       setWandDot(true);
+      panelState.ballDot = true;
     }
     return;
   }
@@ -154,6 +157,7 @@ export async function onMessageReceived(messageId: number, type: string): Promis
     result.entry.source = 'raw';
     panelState.raw += 1;
     setWandDot(true);
+    panelState.ballDot = true;
   }
 
   message.mes = cleanText;
@@ -170,6 +174,7 @@ export async function onMessageReceived(messageId: number, type: string): Promis
   if (result.sealed) {
     panelState.lastSealed = result.sealed.index;
     setWandDot(true);
+    panelState.ballDot = true;
   }
 
   commitState(result.state);
@@ -239,6 +244,11 @@ export async function onMessageDeleted(): Promise<void> {
 }
 
 export async function onChatChanged(): Promise<void> {
+  panelState.missing = 0;
+  panelState.raw = 0;
+  panelState.trimmedLast = 0;
+  panelState.trimmedAt = 0;
+  panelState.ballDot = false;
   loadFromChat();
   refreshInjection();
   scheduleInitParse();

@@ -508,3 +508,221 @@
 .mneme-entry-actions .mneme-link {
   margin-left: 0;
 }
+
+/* ── 悬浮球 ── */
+.mneme-ball {
+  position: fixed;
+  box-sizing: border-box;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  transition:
+    left 0.16s ease,
+    clip-path 0.16s ease,
+    width 0.16s ease,
+    height 0.16s ease;
+}
+
+.mneme-ball:active {
+  cursor: grabbing;
+}
+
+.mneme-ball-dragging {
+  transition: none;
+  cursor: grabbing;
+}
+
+.mneme-ball-letter {
+  font-family: "Cormorant Garamond", "Noto Serif SC", Georgia, serif;
+  font-style: italic;
+  line-height: 1;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+  transform: translateX(var(--mneme-ball-shift, 0px));
+  transition: transform 0.16s ease;
+  pointer-events: none;
+  user-select: none;
+}
+
+.mneme-ball-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.mneme-ball-dot {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5ad17a;
+  box-shadow: 0 0 6px #5ad17a;
+  pointer-events: none;
+}
+
+/* ── 概览抽屉 ── */
+.mneme-drawer {
+  position: fixed;
+  box-sizing: border-box;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  max-height: 72vh;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.12));
+  background: var(--SmartThemeBlurTintColor, rgba(24, 24, 28, 0.96));
+  color: var(--SmartThemeBodyColor, #e8e4dc);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(14px);
+}
+
+.mneme-theme-light.mneme-drawer {
+  background: #f7f3ea;
+  color: #2a2622;
+}
+
+.mneme-theme-dark.mneme-drawer {
+  background: rgba(18, 18, 22, 0.97);
+  color: #e8e4dc;
+}
+
+.mneme-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.1));
+}
+
+.mneme-drawer-title {
+  font-family: "Cormorant Garamond", "Noto Serif SC", Georgia, serif;
+  font-style: italic;
+  letter-spacing: 0.06em;
+  color: var(--mneme-accent, #b08d57);
+}
+
+.mneme-drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding: 10px 14px 14px;
+}
+
+.mneme-drawer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mneme-drawer-section > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.mneme-drawer-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.mneme-drawer-section > summary::before {
+  content: "▸";
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.mneme-drawer-section[open] > summary::before {
+  content: "▾";
+}
+
+.mneme-drawer-section > summary:hover {
+  opacity: 1;
+  color: var(--mneme-accent, #b08d57);
+}
+
+.mneme-drawer-heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: normal;
+  letter-spacing: 0.08em;
+  opacity: 0.65;
+}
+
+.mneme-drawer-line {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mneme-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mneme-mini-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.1));
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.mneme-meter {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.mneme-meter-fill {
+  height: 100%;
+  background: var(--mneme-accent, #b08d57);
+}
+
+/* 开关状态：绿=开启，红=关闭 */
+.mneme-icon-btn-on {
+  color: #5ad17a;
+  border-color: rgba(90, 209, 122, 0.55);
+  background: rgba(90, 209, 122, 0.12);
+  opacity: 1;
+}
+
+.mneme-icon-btn-on:hover {
+  border-color: #5ad17a;
+}
+
+.mneme-icon-btn-off {
+  color: #e46c6c;
+  border-color: rgba(228, 108, 108, 0.55);
+  background: rgba(228, 108, 108, 0.1);
+  opacity: 1;
+}
+
+.mneme-icon-btn-off:hover {
+  border-color: #e46c6c;
+}
+
+.mneme-icon-btn:disabled {
+  cursor: default;
+}

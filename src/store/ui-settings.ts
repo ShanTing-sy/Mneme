@@ -23,6 +23,18 @@ const DEFAULTS: MnemeSettings = {
     height: 560,
     minimized: false,
     fontSize: 14,
+    ballVisible: true,
+    ballPositioned: false,
+    ballText: 'M',
+    ballImage: '',
+    ballSize: 44,
+    ballOpacity: 1,
+    ballBgTransparent: true,
+    ballBg: '#1a1a1e',
+    ballBorder: false,
+    ballBorderColor: '#b08d57',
+    ballColor: '#b08d57',
+    ballHalfHide: true,
   },
 };
 
@@ -47,6 +59,19 @@ export function mergeSettings(
     40,
     Math.max(0, Math.round(Number(merged.keepRecentTurns) || 0)),
   );
+
+  const ui = merged.ui;
+  ui.ballText = String(ui.ballText ?? 'M').trim().slice(0, 4) || 'M';
+  ui.ballImage = String(ui.ballImage ?? '').trim();
+  ui.ballSize = Math.min(72, Math.max(32, Math.round(Number(ui.ballSize) || 44)));
+  const opacity = Number(ui.ballOpacity);
+  ui.ballOpacity = Math.min(1, Math.max(0.2, Number.isFinite(opacity) ? opacity : 1));
+  ui.ballBgTransparent = ui.ballBgTransparent !== false;
+  ui.ballBorder = ui.ballBorder === true;
+  ui.ballHalfHide = ui.ballHalfHide !== false;
+  ui.ballBg = String(ui.ballBg || '#1a1a1e');
+  ui.ballBorderColor = String(ui.ballBorderColor || '#b08d57');
+  ui.ballColor = String(ui.ballColor || '#b08d57');
   return merged;
 }
 
@@ -105,8 +130,10 @@ export function reloadSettings(): void {
     changed = true;
   }
 
-  Object.assign(settingsStore, merged);
-  Object.assign(settingsStore.ui, merged.ui);
+  // 不要整体替换 settingsStore.ui：挂载后写入的 ballX/ballY 会被清掉
+  const { ui: mergedUi, ...rest } = merged;
+  Object.assign(settingsStore, rest);
+  Object.assign(settingsStore.ui, mergedUi);
   if (changed) persistSettings(merged);
 }
 

@@ -6,7 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
-const CDP_PORT = 9336;
+// 端口随机化，避免残留实例占着固定端口
+const CDP_PORT = 9300 + Math.floor(Math.random() * 400);
 const PROFILE = path.join(os.tmpdir(), `edge_mneme_live_${Date.now()}`);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -149,6 +150,42 @@ async function main() {
         true,
       );
       check('底部四个标签', await evaluate("document.querySelectorAll('.mneme-tab').length"), 4);
+      check('悬浮球出现在聊天区', await evaluate("!!document.querySelector('.mneme-ball')"), true);
+      check(
+        '悬浮球停靠在 #chat 右缘',
+        await evaluate(`(() => {
+          const ball = document.querySelector('.mneme-ball')?.getBoundingClientRect();
+          const chat = document.getElementById('chat')?.getBoundingClientRect();
+          if (!ball || !chat) return false;
+          return Math.abs(ball.left + ball.width / 2 - chat.right) <= 1;
+        })()`),
+        true,
+      );
+      await evaluate(`(() => {
+        const ball = document.querySelector('.mneme-ball');
+        const rect = ball.getBoundingClientRect();
+        const opts = { bubbles: true, button: 0, clientX: rect.left + 10, clientY: rect.top + 10 };
+        ball.dispatchEvent(new PointerEvent('pointerdown', opts));
+        window.dispatchEvent(new PointerEvent('pointerup', opts));
+        return 'ok';
+      })()`);
+      await sleep(300);
+      check('真实酒馆可打开一览抽屉', await evaluate("!!document.querySelector('.mneme-drawer')"), true);
+      check(
+        '抽屉打开后球完整露出',
+        await evaluate(`(() => {
+          const ball = document.querySelector('.mneme-ball')?.getBoundingClientRect();
+          const chat = document.getElementById('chat')?.getBoundingClientRect();
+          if (!ball || !chat) return false;
+          return ball.right <= chat.right + 1;
+        })()`),
+        true,
+      );
+      await evaluate(
+        "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); 'ok'",
+      );
+      await sleep(200);
+      check('真实酒馆 Esc 可关闭抽屉', await evaluate("!!document.querySelector('.mneme-drawer')"), false);
     }
 
     const mnemeBad = badResponses.filter((line) => line.includes('Mneme'));
@@ -247,13 +284,30 @@ async function main() {
       await sleep(200);
       await saveShot('panel');
 
-      await evaluate("document.querySelectorAll('.mneme-icon-btn')[1].click(); 'ok'");
+      await evaluate(`(() => {
+        const ball = document.querySelector('.mneme-ball');
+        const rect = ball.getBoundingClientRect();
+        const opts = { bubbles: true, button: 0, clientX: rect.left + 10, clientY: rect.top + 10 };
+        ball.dispatchEvent(new PointerEvent('pointerdown', opts));
+        window.dispatchEvent(new PointerEvent('pointerup', opts));
+        return 'ok';
+      })()`);
+      await sleep(400);
+      await evaluate("document.querySelector('.mneme-drawer summary')?.click(); 'ok'");
+      await sleep(250);
+      await saveShot('overview');
+      await evaluate(
+        "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); 'ok'",
+      );
+      await sleep(200);
+
+      await evaluate("document.querySelector('.mneme-icon-btn[title=\"设置\"]').click(); 'ok'");
       await sleep(300);
       await saveShot('settings');
 
       await evaluate("document.querySelector('.mneme-back-btn').click(); 'ok'");
       await sleep(200);
-      await evaluate("document.querySelectorAll('.mneme-icon-btn')[0].click(); 'ok'");
+      await evaluate("document.querySelector('.mneme-icon-btn[title=\"使用说明\"]').click(); 'ok'");
       await sleep(300);
       await saveShot('help');
 
@@ -271,6 +325,8 @@ async function main() {
     process.exitCode = 1;
   } finally {
     edge.kill();
+    // Edge 在 Windows 上偶尔不会随父进程立即退出，硬退出避免脚本悬挂
+    setTimeout(() => process.exit(process.exitCode ?? 0), 300);
   }
 }
 

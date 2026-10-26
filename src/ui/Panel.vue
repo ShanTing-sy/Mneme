@@ -10,6 +10,16 @@
       <div class="mneme-brand">Mneme</div>
       <div class="mneme-head-actions">
         <button
+          class="mneme-icon-btn"
+          :class="settingsStore.enabled ? 'mneme-icon-btn-on' : 'mneme-icon-btn-off'"
+          :aria-pressed="settingsStore.enabled"
+          :title="settingsStore.enabled ? '插件已启用，点击休眠' : '插件休眠中，点击启用'"
+          @pointerdown.stop
+          @click="toggleEnabled"
+        >
+          ⏻
+        </button>
+        <button
           v-if="panelState.showHelp || panelState.showSettings"
           class="mneme-icon-btn mneme-back-btn"
           title="返回"
@@ -19,8 +29,43 @@
           ←
         </button>
         <template v-else>
-          <button class="mneme-icon-btn" title="使用说明" @pointerdown.stop @click="openHelp">?</button>
-          <button class="mneme-icon-btn" title="设置" @pointerdown.stop @click="openSettings">⚙</button>
+          <button
+            class="mneme-icon-btn"
+            title="使用说明"
+            @pointerdown.stop
+            @click="openHelp"
+          >
+            ?
+          </button>
+          <button
+            class="mneme-icon-btn"
+            :class="
+              settingsStore.ui.ballVisible && settingsStore.enabled
+                ? 'mneme-icon-btn-on'
+                : 'mneme-icon-btn-off'
+            "
+            :aria-pressed="settingsStore.ui.ballVisible && settingsStore.enabled"
+            :disabled="!settingsStore.enabled"
+            :title="
+              !settingsStore.enabled
+                ? '插件休眠中，悬浮球不显示'
+                : settingsStore.ui.ballVisible
+                  ? '隐藏悬浮球'
+                  : '显示悬浮球'
+            "
+            @pointerdown.stop
+            @click="toggleBall"
+          >
+            ◍
+          </button>
+          <button
+            class="mneme-icon-btn"
+            title="设置"
+            @pointerdown.stop
+            @click="openSettings"
+          >
+            ⚙
+          </button>
         </template>
         <button class="mneme-icon-btn" title="关闭" @pointerdown.stop @click="closePanel">×</button>
       </div>
@@ -52,6 +97,7 @@
 import { computed, ref } from 'vue';
 import { panelState, type TabKey } from './panel-state.ts';
 import { settingsStore, updateSettings } from '../store/ui-settings.ts';
+import { refreshInjection } from '../host/events.ts';
 import MemoryTab from './tabs/MemoryTab.vue';
 import BondsTab from './tabs/BondsTab.vue';
 import ItemsTab from './tabs/ItemsTab.vue';
@@ -79,6 +125,19 @@ const panelStyle = computed(() => ({
   fontSize: `${settingsStore.ui.fontSize}px`,
   '--mneme-accent': settingsStore.ui.accent,
 }));
+
+function toggleEnabled(): void {
+  const enabled = !settingsStore.enabled;
+  updateSettings({ enabled });
+  panelState.overviewOpen = false;
+  refreshInjection();
+}
+
+function toggleBall(): void {
+  updateSettings({
+    ui: { ...settingsStore.ui, ballVisible: !settingsStore.ui.ballVisible },
+  });
+}
 
 function openHelp(): void {
   panelState.showHelp = true;
