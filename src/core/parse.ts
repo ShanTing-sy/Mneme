@@ -1,7 +1,7 @@
 import type { Delta, Importance } from './types.ts';
 
 const BLOCK_RE = /<!--\s*MNEME([\s\S]*?)MNEME\s*-->/i;
-const FENCE_RE = /```(?:mneme|json)\s*([\s\S]*?)```/i;
+const FENCE_RE = /```(?:mneme|json)\s*([\s\S]*?)```/gi;
 
 export interface ParseResult {
   ok: boolean;
@@ -24,8 +24,11 @@ export function parseDelta(text: string): ParseResult {
     block = blockMatch[0];
     inner = blockMatch[1];
   } else {
-    const fenceMatch = text.match(FENCE_RE);
-    if (fenceMatch && /"summary"\s*:/.test(fenceMatch[1])) {
+    // 只看单个代码块内部，不能跨块匹配；优先找第一个含 summary 的块
+    const fenceMatch = [...text.matchAll(FENCE_RE)].find((match) =>
+      /"summary"\s*:/.test(match[1] ?? ''),
+    );
+    if (fenceMatch) {
       block = fenceMatch[0];
       inner = fenceMatch[1];
     }

@@ -3,6 +3,9 @@ export type ItemStatus = 'held' | 'lost' | 'consumed';
 export type TimelineNodeType = '主线' | '支线' | '伏笔' | '里程碑';
 export type TimelineStatus = '未发生' | '进行中' | '已发生';
 export type DirectorView = 'current' | 'current-next' | 'volume' | 'full';
+export type AiSource = 'main' | 'secondary';
+export type InjectionMode = 'prompt' | 'worldbook';
+export type SecondaryApiSource = 'profile' | 'custom';
 
 export interface MemoryEntry {
   id: string;
@@ -120,6 +123,69 @@ export interface MnemeUi {
   ballHalfHide: boolean;
 }
 
+export interface PresetMemory {
+  volumeSize: number;
+  tokenBudget: number;
+  majorRetentionVolumes: number;
+  keepRecentTurns: number;
+  directorView: DirectorView;
+  autoInitBonds: boolean;
+  autoTimeline: boolean;
+}
+
+export interface PresetAppearance {
+  theme: 'auto' | 'light' | 'dark';
+  accent: string;
+  fontSize: number;
+  ballText: string;
+  ballImage: string;
+  ballSize: number;
+  ballOpacity: number;
+  ballBgTransparent: boolean;
+  ballBg: string;
+  ballBorder: boolean;
+  ballBorderColor: string;
+  ballColor: string;
+  ballHalfHide: boolean;
+}
+
+export interface SummaryPreset {
+  id: string;
+  name: string;
+  prompt: string;
+  memory: PresetMemory;
+  appearance: PresetAppearance;
+}
+
+export interface SecondaryApiParams {
+  temperature: number;
+  topP: number;
+  maxTokens: number;
+  timeoutMs: number;
+  retries: number;
+}
+
+export interface SecondaryApiConfig {
+  id: string;
+  name: string;
+  enabled: boolean;
+  source: SecondaryApiSource;
+  profileId: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  availableModels: string[];
+  promptId: string | null;
+  params: SecondaryApiParams;
+}
+
+export type SummaryMessageRole = 'system' | 'user' | 'assistant';
+
+export interface SummaryMessage {
+  role: SummaryMessageRole;
+  content: string;
+}
+
 export interface MnemeSettings {
   settingsVersion?: number;
   enabled: boolean;
@@ -132,7 +198,15 @@ export interface MnemeSettings {
   autoTimeline: boolean;
   showMissingBadge: boolean;
   debug: boolean;
+  /** 旧版单条提示词，仅用于迁移与兜底 */
   summaryPrompt: string;
+  summaryPresets: SummaryPreset[];
+  activePresetId: string | null;
+  aiSource: AiSource;
+  activeSecondaryApiId: string | null;
+  secondaryApis: SecondaryApiConfig[];
+  injectionMode: InjectionMode;
+  worldbookPrefix: string;
   ui: MnemeUi;
 }
 

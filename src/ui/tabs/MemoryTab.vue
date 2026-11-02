@@ -3,17 +3,16 @@
     <div class="mneme-row">
       <input v-model="query" class="mneme-input" placeholder="搜索摘要、地点、时间" />
       <button class="mneme-btn mneme-btn-sm" @click="showForm = !showForm">新增</button>
-      <button class="mneme-btn mneme-btn-sm" @click="togglePrompt">提示词</button>
+      <button class="mneme-btn mneme-btn-sm" @click="panelState.activeTab = 'prompt'">
+        提示词
+      </button>
     </div>
 
-    <div v-if="showPrompt" class="mneme-card">
-      <p class="mneme-muted">摘要生成的系统提示词（留空则使用默认）</p>
-      <textarea v-model="promptDraft" class="mneme-textarea" rows="10"></textarea>
-      <div class="mneme-row">
-        <button class="mneme-btn mneme-btn-sm" @click="savePrompt">保存</button>
-        <button class="mneme-btn mneme-btn-sm" @click="resetPrompt">恢复默认</button>
-      </div>
-    </div>
+    <p v-if="panelState.summaryRunning" class="mneme-muted">
+      副 API 总结中 · {{ panelState.summaryStage }}
+      <span v-if="panelState.summaryQueue"> · 排队 {{ panelState.summaryQueue }}</span>
+    </p>
+    <p v-if="panelState.summaryError" class="mneme-warn">{{ panelState.summaryError }}</p>
 
     <form v-if="showForm" class="mneme-card" @submit.prevent="addEntry">
       <textarea
@@ -159,16 +158,14 @@ import type { Importance, MemoryEntry } from '../../core/types.ts';
 import { removeEntry } from '../../core/reduce.ts';
 import { cloneData } from '../../core/clone.ts';
 import { store, commitState, flushState } from '../../store/chat-state.ts';
-import { settingsStore, updateSettings } from '../../store/ui-settings.ts';
+import { settingsStore } from '../../store/ui-settings.ts';
 import { refreshInjection } from '../../host/events.ts';
-import { defaultSummaryPrompt } from '../../core/inject.ts';
+import { panelState } from '../panel-state.ts';
 
 const state = computed(() => store.state);
 const volumeSize = computed(() => settingsStore.volumeSize);
 const query = ref('');
 const showForm = ref(false);
-const showPrompt = ref(false);
-const promptDraft = ref('');
 const draft = reactive({
   summary: '',
   storyTime: '',
@@ -308,24 +305,5 @@ function remove(entryId: string): void {
   commitState(removeEntry(state.value, entryId));
   refreshInjection();
   void flushState();
-}
-
-function togglePrompt(): void {
-  showPrompt.value = !showPrompt.value;
-  if (showPrompt.value) {
-    promptDraft.value = settingsStore.summaryPrompt || defaultSummaryPrompt();
-  }
-}
-
-function savePrompt(): void {
-  updateSettings({ summaryPrompt: promptDraft.value.trim() });
-  refreshInjection();
-  showPrompt.value = false;
-}
-
-function resetPrompt(): void {
-  promptDraft.value = defaultSummaryPrompt();
-  updateSettings({ summaryPrompt: '' });
-  refreshInjection();
 }
 </script>

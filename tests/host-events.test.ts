@@ -57,11 +57,12 @@ test('strips the block, records the entry and rebuilds the injection', async () 
 
   await onMessageReceived(0, 'normal');
 
-  assert.equal(ctx.chat[0].mes, body);
+  // 聊天正文与记忆块都保留；只在发给模型时剔除
+  assert.match(ctx.chat[0].mes, /MNEME/);
+  assert.match(ctx.chat[0].mes, /她抬头看了你一眼/);
   assert.equal(ctx.chatMetadata.mneme.entries.length, 1);
   assert.equal(ctx.chatMetadata.mneme.entries[0].mesHash, hashText(body));
   assert.match(ctx.injected.value, /Mneme·记录要求/);
-  assert.equal(ctx.rendered, 1);
 });
 
 test('keeps a raw entry when JSON is broken but the block exists', async () => {
@@ -74,7 +75,8 @@ test('keeps a raw entry when JSON is broken but the block exists', async () => {
 
   await onMessageReceived(0, 'normal');
 
-  assert.equal(ctx.chat[0].mes, '正文');
+  assert.match(ctx.chat[0].mes, /正文/);
+  assert.match(ctx.chat[0].mes, /MNEME/);
   assert.equal(ctx.chatMetadata.mneme.entries.length, 1);
   assert.equal(ctx.chatMetadata.mneme.entries[0].source, 'raw');
 });

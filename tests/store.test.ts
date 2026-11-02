@@ -67,6 +67,29 @@ test('悬浮球设置缺省时补全默认值', async () => {
   assert.equal(loaded.ui.ballHalfHide, true);
 });
 
+test('旧版 summaryPrompt 会迁移成一份命名配置', async () => {
+  const ctx = installFakeContext();
+  ctx.extensionSettings.mneme = {
+    settingsVersion: 1,
+    summaryPrompt: '旧版自定义提示词',
+    volumeSize: 12,
+    ui: { theme: 'dark', ballSize: 50 },
+  };
+  const { reloadSettings, settingsStore } = await import('../src/store/ui-settings.ts');
+
+  reloadSettings();
+
+  assert.equal(settingsStore.settingsVersion, 2);
+  assert.equal(settingsStore.summaryPresets.length, 1);
+  assert.equal(settingsStore.summaryPresets[0].id, 'legacy');
+  assert.equal(settingsStore.summaryPresets[0].name, '旧自定义提示词');
+  assert.equal(settingsStore.summaryPresets[0].prompt, '旧版自定义提示词');
+  assert.equal(settingsStore.summaryPresets[0].memory.volumeSize, 12);
+  assert.equal(settingsStore.summaryPresets[0].appearance.theme, 'dark');
+  assert.equal(settingsStore.activePresetId, 'legacy');
+  assert.equal(ctx.extensionSettings.mneme.settingsVersion, 2);
+});
+
 test('悬浮球样式参数会被夹紧', async () => {
   const ctx = installFakeContext();
   ctx.extensionSettings.mneme = {

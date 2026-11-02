@@ -1,6 +1,7 @@
 import type { MnemeState } from './types.ts';
 import { hashText } from './hash.ts';
 import { cloneData } from './clone.ts';
+import { stripDelta } from './strip.ts';
 
 export interface ChatLike {
   mes: string;
@@ -26,7 +27,8 @@ export function reconcileState(state: MnemeState, chat: ChatLike[]): ReconcileRe
 
   chat.forEach((message, index) => {
     if (!message || message.is_user) return;
-    const hash = hashText(String(message.mes ?? ''));
+    // 聊天里保留 MNEME 块，但指纹按「去掉块后的正文」计算
+    const hash = hashText(stripDelta(String(message.mes ?? '')).text);
     const list = buckets.get(hash) ?? [];
     list.push(index);
     buckets.set(hash, list);

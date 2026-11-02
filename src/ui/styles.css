@@ -726,3 +726,158 @@
 .mneme-icon-btn:disabled {
   cursor: default;
 }
+
+/* ── 副 API / 提示词配置 ── */
+.mneme-segmented {
+  display: flex;
+  gap: 6px;
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.12));
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.mneme-seg {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.mneme-seg.active {
+  opacity: 1;
+  border-color: var(--mneme-accent, #b08d57);
+  color: var(--mneme-accent, #b08d57);
+  background: rgba(176, 141, 87, 0.1);
+}
+
+.mneme-preset,
+.mneme-api-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.1));
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+}
+
+.mneme-preset.active,
+.mneme-api-card.active {
+  border-color: var(--mneme-accent, #b08d57);
+  background: rgba(176, 141, 87, 0.08);
+}
+
+.mneme-preset-head,
+.mneme-api-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mneme-preset-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  opacity: 0.55;
+}
+
+.mneme-preset.active .mneme-preset-dot,
+.mneme-api-card.active .mneme-preset-dot {
+  background: var(--mneme-accent, #b08d57);
+  border-color: var(--mneme-accent, #b08d57);
+  opacity: 1;
+}
+
+.mneme-preset-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mneme-preset-tag {
+  flex: 0 0 auto;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  opacity: 0.55;
+}
+
+.mneme-preset-actions,
+.mneme-api-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.mneme-preset-actions .mneme-link,
+.mneme-api-actions .mneme-link {
+  margin-left: 0;
+}
+
+.mneme-preset-summary {
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0.62;
+}
+
+.mneme-api-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0.62;
+}
+
+.mneme-preset-section {
+  border-top: 1px dashed var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.12));
+  padding-top: 6px;
+}
+
+.mneme-preset-section > summary {
+  cursor: pointer;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  opacity: 0.72;
+  margin-bottom: 4px;
+}
+
+.mneme-preset-editor,
+.mneme-api-editor {
+  gap: 8px;
+}
+
+.mneme-field .mneme-btn {
+  flex: 0 0 auto;
+}
+
+.mneme-status-ok {
+  color: #5ad17a;
+}
+
+.mneme-status-error {
+  color: #e46c6c;
+}
+
+.mneme-default-preview {
+  border-style: dashed;
+}
+
+.mneme-default-preview textarea[readonly] {
+  cursor: default;
+  opacity: 0.85;
+}

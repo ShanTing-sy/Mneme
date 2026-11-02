@@ -37,6 +37,25 @@ test('accepts fenced mneme fallback', () => {
   assert.equal(r.delta?.summary, '雨停了。');
 });
 
+test('skips a non-summary fence and finds the real delta fence', () => {
+  const text = [
+    '正文',
+    '```json',
+    '{"foo":1}',
+    '```',
+    '中间正文',
+    '```json',
+    '{"summary":"真记录"}',
+    '```',
+    '结尾',
+  ].join('\n');
+  const r = parseDelta(text);
+  assert.equal(r.ok, true);
+  assert.equal(r.delta?.summary, '真记录');
+  assert.match(r.block ?? '', /"summary"/);
+  assert.doesNotMatch(r.block ?? '', /"foo"/);
+});
+
 test('rejects empty summary', () => {
   const r = parseDelta('<!--MNEME {"summary":""} MNEME-->');
   assert.equal(r.ok, false);

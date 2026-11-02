@@ -1,12 +1,13 @@
 import { reactive } from 'vue';
 
-export type TabKey = 'memory' | 'bonds' | 'items' | 'timeline';
+export type TabKey = 'memory' | 'bonds' | 'prompt' | 'items' | 'timeline';
 
 export const panelState = reactive({
   visible: false,
   activeTab: 'memory' as TabKey,
   showHelp: false,
   showSettings: false,
+  showApis: false,
   missing: 0,
   raw: 0,
   initRunning: false,
@@ -18,6 +19,17 @@ export const panelState = reactive({
   ballDot: false,
   trimmedLast: 0,
   trimmedAt: 0,
+  summaryRunning: false,
+  summaryStage: '',
+  summaryError: '',
+  summaryQueue: 0,
+  apiTestStatus: '',
+  worldbookReady: false,
+  worldbookActive: false,
+  worldbookBook: '',
+  worldbookBound: false,
+  worldbookConflict: '',
+  worldbookError: '',
 });
 
 export function togglePanel(value?: boolean): void {
@@ -26,5 +38,6 @@ export function togglePanel(value?: boolean): void {
     panelState.missing = 0;
     panelState.showHelp = false;
     panelState.showSettings = false;
+    panelState.showApis = false;
   }
 }

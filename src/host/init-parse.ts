@@ -6,8 +6,10 @@ import { normalizeParseResult } from '../core/parse-result.ts';
 import { getCtx } from './context.ts';
 import { store, ensureStateForChat, commitState, flushState } from '../store/chat-state.ts';
 import { readSettings } from '../store/ui-settings.ts';
+import { getActiveSecondaryApi } from '../core/presets.ts';
 import { panelState } from '../ui/panel-state.ts';
 import { refreshInjection } from './events.ts';
+import { callSecondaryApi } from './secondary-api.ts';
 
 export interface CharacterContext {
   card: string;
@@ -139,24 +141,30 @@ export async function runInitParse(options: {
   let progressTimer: ReturnType<typeof setInterval> | null = null;
 
   try {
-    if (typeof ctx.generateRaw !== 'function') {
+    const settings = readSettings();
+    const secondary = settings.aiSource === 'secondary' ? getActiveSecondaryApi(settings) : null;
+    if (settings.aiSource === 'secondary' && !secondary) {
+      throw new Error('摘要来源已设为副 API，但没有启用中的副 API');
+    }
+    if (!secondary && typeof ctx.generateRaw !== 'function') {
       throw new Error('当前酒馆版本不支持 generateRaw');
     }
 
-    const settings = readSettings();
     const context = await collectCharacterContext();
     if (abortRequested) throw new Error('__mneme_stopped__');
     const prompt = buildParsePrompt(context, { bonds: needBonds, timeline: needTimeline });
 
     panelState.initProgress = 25;
-    panelState.initStage = `已收集 ${context.stats.entries} 条条目，等待模型返回…`;
+    panelState.initStage = `已收集 ${context.stats.entries} 条条目，等待${
+      secondary ? secondary.name : '模型'
+    }返回…`;
 
     if (settings.debug) {
       console.info('[Mneme] init context stats', JSON.stringify(context.stats));
       console.info('[Mneme] init prompt', prompt.slice(0, 4000));
     }
 
-    // 单次 generateRaw 没有真实流式进度，这里用缓慢推进的估算值
+    // 单次请求没有真实流式进度，这里用缓慢推进的估算值
     progressTimer = setInterval(() => {
       if (panelState.initProgress < 85) {
         panelState.initProgress += 1;
@@ -164,25 +172,39 @@ export async function runInitParse(options: {
     }, 700);
 
     let raw: unknown;
-    try {
-      raw = await ctx.generateRaw({
-        systemPrompt: '你是剧情分析助手。只输出 JSON，不要输出任何解释或代码围栏。',
-        prompt,
-        responseLength: 1600,
-        jsonSchema: PARSE_SCHEMA,
-      });
-    } catch (error: any) {
-      const message = String(error?.message ?? error);
-      // 部分后端不支持 jsonSchema：只在明确是 schema 相关错误时重试一次
-      if (!/json|schema|response_format|unsupported|invalid_request/i.test(message)) {
-        throw error;
+    if (secondary) {
+      raw = await callSecondaryApi(
+        secondary,
+        [
+          {
+            role: 'system',
+            content: '你是剧情分析助手。只输出 JSON，不要输出任何解释或代码围栏。',
+          },
+          { role: 'user', content: prompt },
+        ],
+        { maxTokens: Math.max(1200, secondary.params.maxTokens) },
+      );
+    } else {
+      try {
+        raw = await ctx.generateRaw({
+          systemPrompt: '你是剧情分析助手。只输出 JSON，不要输出任何解释或代码围栏。',
+          prompt,
+          responseLength: 1600,
+          jsonSchema: PARSE_SCHEMA,
+        });
+      } catch (error: any) {
+        const message = String(error?.message ?? error);
+        // 部分后端不支持 jsonSchema：只在明确是 schema 相关错误时重试一次
+        if (!/json|schema|response_format|unsupported|invalid_request/i.test(message)) {
+          throw error;
+        }
+        console.warn('[Mneme] jsonSchema 不受支持，改用纯提示词重试', message);
+        raw = await ctx.generateRaw({
+          systemPrompt: '你是剧情分析助手。只输出 JSON，不要输出任何解释或代码围栏。',
+          prompt,
+          responseLength: 1600,
+        });
       }
-      console.warn('[Mneme] jsonSchema 不受支持，改用纯提示词重试', message);
-      raw = await ctx.generateRaw({
-        systemPrompt: '你是剧情分析助手。只输出 JSON，不要输出任何解释或代码围栏。',
-        prompt,
-        responseLength: 1600,
-      });
     }
 
     if (abortRequested) throw new Error('__mneme_stopped__');

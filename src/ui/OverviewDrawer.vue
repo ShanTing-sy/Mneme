@@ -40,10 +40,13 @@
       </details>
 
       <details class="mneme-drawer-section">
-        <summary class="mneme-drawer-heading">楼层隐藏</summary>
+        <summary class="mneme-drawer-heading">对模型隐藏</summary>
         <template v-if="overview.hasChat">
           <div class="mneme-mini-item">
-            <p class="mneme-drawer-line">已隐去记忆块：{{ overview.floors.stripped }} 层</p>
+            <p class="mneme-drawer-line">已为 {{ overview.floors.stripped }} 层生成记忆</p>
+            <p class="mneme-muted">
+              记忆块只从发给模型的内容里剔除，不删除或改写聊天记录。
+            </p>
             <p class="mneme-muted">
               原文兜底 {{ overview.floors.rawFloors }} 层 · 内容过期
               {{ overview.floors.stale }} 层
@@ -57,13 +60,13 @@
             </p>
           </div>
           <div class="mneme-mini-item">
-            <p class="mneme-drawer-line">注入裁剪：{{ trimmedText }}</p>
+            <p class="mneme-drawer-line">发给模型时省略：{{ trimmedText }}</p>
             <p class="mneme-muted">
-              保留最近 {{ overview.floors.keepRecentTurns }} 轮原始对话
+              发送给模型：最近 {{ overview.floors.keepRecentTurns }} 轮原始对话（聊天记录保留）
             </p>
           </div>
           <div class="mneme-mini-item">
-            <p class="mneme-drawer-line">酒馆隐藏消息：{{ overview.floors.tavernHidden }} 层</p>
+            <p class="mneme-drawer-line">酒馆自带隐藏消息：{{ overview.floors.tavernHidden }} 层</p>
             <p v-if="hiddenFloors.length" class="mneme-muted">
               最近：{{ hiddenFloors.map((floor) => `第 ${floor} 层`).join('、') }}
             </p>
@@ -168,7 +171,7 @@ const volumePercent = computed(() => {
 const trimmedText = computed(() => {
   const floors = overview.value.floors;
   if (!floors.trimmedAt) return '尚未发生';
-  return `上次生成隐藏 ${floors.trimmedLast} 条原始消息`;
+  return `上次生成不发送 ${floors.trimmedLast} 条原始消息`;
 });
 
 const hiddenFloors = computed(() => overview.value.floors.tavernHiddenFloors);

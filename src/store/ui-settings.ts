@@ -1,8 +1,14 @@
 import { reactive } from 'vue';
-import type { MnemeSettings } from '../core/types.ts';
+import type { MnemeSettings, SecondaryApiConfig, SummaryPreset } from '../core/types.ts';
 import { getCtx } from '../host/context.ts';
+import {
+  createPresetFromCurrent,
+  normalizePreset,
+  normalizeSecondaryApi,
+} from '../core/presets.ts';
 
 const DEFAULTS: MnemeSettings = {
+  settingsVersion: 0,
   enabled: true,
   volumeSize: 10,
   majorRetentionVolumes: 2,
@@ -14,6 +20,13 @@ const DEFAULTS: MnemeSettings = {
   showMissingBadge: true,
   debug: false,
   summaryPrompt: '',
+  summaryPresets: [],
+  activePresetId: null,
+  aiSource: 'main',
+  activeSecondaryApiId: null,
+  secondaryApis: [],
+  injectionMode: 'prompt',
+  worldbookPrefix: 'Mneme',
   ui: {
     theme: 'auto',
     accent: '#b08d57',
@@ -38,7 +51,50 @@ const DEFAULTS: MnemeSettings = {
   },
 };
 
+function normalizePrefix(value: unknown): string {
+  const text = String(value ?? '')
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 20);
+  return text || 'Mneme';
+}
+
+function normalizePresets(
+  base: MnemeSettings,
+  raw: unknown,
+): SummaryPreset[] {
+  if (!Array.isArray(raw)) return base.summaryPresets;
+  const seen = new Set<string>();
+  const result: SummaryPreset[] = [];
+  for (const item of raw) {
+    const preset = normalizePreset(item, base);
+    if (!preset || seen.has(preset.id)) continue;
+    seen.add(preset.id);
+    result.push(preset);
+    if (result.length >= 50) break;
+  }
+  return result;
+}
+
+function normalizeApis(raw: unknown): SecondaryApiConfig[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const result: SecondaryApiConfig[] = [];
+  raw.forEach((item, index) => {
+    const api = normalizeSecondaryApi(item, index);
+    if (!api || seen.has(api.id)) return;
+    seen.add(api.id);
+    result.push(api);
+  });
+  return result.slice(0, 20);
+}
+
 export const settingsStore = reactive<MnemeSettings>(structuredClone(DEFAULTS));
+
+export function defaultSettings(): MnemeSettings {
+  return mergeSettings(DEFAULTS, undefined);
+}
 
 export function mergeSettings(
   base: MnemeSettings,
@@ -72,6 +128,24 @@ export function mergeSettings(
   ui.ballBg = String(ui.ballBg || '#1a1a1e');
   ui.ballBorderColor = String(ui.ballBorderColor || '#b08d57');
   ui.ballColor = String(ui.ballColor || '#b08d57');
+
+  merged.summaryPresets = normalizePresets(merged, patch?.summaryPresets ?? merged.summaryPresets);
+  merged.activePresetId =
+    typeof merged.activePresetId === 'string' &&
+    merged.summaryPresets.some((preset) => preset.id === merged.activePresetId)
+      ? merged.activePresetId
+      : null;
+
+  merged.secondaryApis = normalizeApis(patch?.secondaryApis ?? merged.secondaryApis);
+  const activeApi = merged.secondaryApis.find(
+    (api) => api.id === merged.activeSecondaryApiId && api.enabled,
+  );
+  merged.activeSecondaryApiId = activeApi
+    ? activeApi.id
+    : merged.secondaryApis.find((api) => api.enabled)?.id ?? null;
+  merged.aiSource = merged.aiSource === 'secondary' ? 'secondary' : 'main';
+  merged.injectionMode = merged.injectionMode === 'worldbook' ? 'worldbook' : 'prompt';
+  merged.worldbookPrefix = normalizePrefix(merged.worldbookPrefix);
   return merged;
 }
 
@@ -117,11 +191,15 @@ export function reloadSettings(): void {
   const merged = readSettings();
   let changed = false;
 
-  // 旧版本默认开启自动解析；一次性改为默认关闭，之后尊重用户选择
-  if (!merged.settingsVersion) {
-    merged.autoInitBonds = false;
-    merged.autoTimeline = false;
-    merged.settingsVersion = 1;
+  // V1.1.x 的旧版单条提示词迁移成一份命名配置
+  if ((merged.settingsVersion ?? 0) < 2) {
+    if (!merged.summaryPresets.length && merged.summaryPrompt.trim()) {
+      const preset = createPresetFromCurrent(merged, '旧自定义提示词', 'legacy');
+      preset.prompt = merged.summaryPrompt;
+      merged.summaryPresets = [preset];
+      merged.activePresetId = preset.id;
+    }
+    merged.settingsVersion = 2;
     changed = true;
   }
 

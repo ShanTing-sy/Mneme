@@ -36,6 +36,21 @@ test('remaps message ids after an earlier message is deleted', () => {
   assert.equal(r.remapped, 1);
 });
 
+test('matches entries even when the chat still contains the MNEME block', () => {
+  const state = createEmptyState();
+  const body = '她推门进来。';
+  state.entries = [entryFor('e1', hashText(body), 0)];
+  const chat = [
+    {
+      mes: `${body}\n<!--MNEME\n{"summary":"x"}\nMNEME-->`,
+      is_user: false,
+    },
+  ];
+  const r = reconcileState(state, chat);
+  assert.equal(r.dropped.length, 0);
+  assert.equal(r.state.entries.length, 1);
+});
+
 test('drops entries whose text is gone', () => {
   const state = createEmptyState();
   state.entries = [entryFor('e1', hashText('被删掉的话'), 1)];

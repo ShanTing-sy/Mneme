@@ -20,7 +20,22 @@
           ⏻
         </button>
         <button
-          v-if="panelState.showHelp || panelState.showSettings"
+          class="mneme-icon-btn"
+          data-mneme="api"
+          :class="settingsStore.aiSource === 'secondary' ? 'mneme-icon-btn-on' : ''"
+          :aria-pressed="settingsStore.aiSource === 'secondary'"
+          :title="
+            settingsStore.aiSource === 'secondary'
+              ? '摘要由副 API 生成，点击管理'
+              : '副 API 管理（当前由主模型生成摘要）'
+          "
+          @pointerdown.stop
+          @click="openApis"
+        >
+          ⇄
+        </button>
+        <button
+          v-if="panelState.showHelp || panelState.showSettings || panelState.showApis"
           class="mneme-icon-btn mneme-back-btn"
           title="返回"
           @pointerdown.stop
@@ -74,6 +89,7 @@
     <section class="mneme-body">
       <HelpPanel v-if="panelState.showHelp" />
       <SettingsPanel v-else-if="panelState.showSettings" />
+      <ApiPanel v-else-if="panelState.showApis" />
       <component v-else :is="currentTab" />
     </section>
 
@@ -100,19 +116,30 @@ import { settingsStore, updateSettings } from '../store/ui-settings.ts';
 import { refreshInjection } from '../host/events.ts';
 import MemoryTab from './tabs/MemoryTab.vue';
 import BondsTab from './tabs/BondsTab.vue';
+import PromptTab from './tabs/PromptTab.vue';
 import ItemsTab from './tabs/ItemsTab.vue';
 import TimelineTab from './tabs/TimelineTab.vue';
 import HelpPanel from './components/HelpPanel.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
+import ApiPanel from './components/ApiPanel.vue';
+import { abortSecondarySummary } from '../host/summary-runner.ts';
+import { deactivateWorldbook, scheduleWorldbookSync } from '../host/worldbook-sync.ts';
 
 const tabs: { key: TabKey; label: string }[] = [
   { key: 'memory', label: '记忆' },
   { key: 'bonds', label: '羁绊' },
+  { key: 'prompt', label: '提示词' },
   { key: 'items', label: '道具' },
   { key: 'timeline', label: '剧情线' },
 ];
 
-const tabComponents = { memory: MemoryTab, bonds: BondsTab, items: ItemsTab, timeline: TimelineTab };
+const tabComponents = {
+  memory: MemoryTab,
+  bonds: BondsTab,
+  prompt: PromptTab,
+  items: ItemsTab,
+  timeline: TimelineTab,
+};
 const currentTab = computed(() => tabComponents[panelState.activeTab]);
 
 const panelRef = ref<HTMLElement | null>(null);
@@ -130,7 +157,12 @@ function toggleEnabled(): void {
   const enabled = !settingsStore.enabled;
   updateSettings({ enabled });
   panelState.overviewOpen = false;
+  if (!enabled) {
+    abortSecondarySummary();
+    void deactivateWorldbook();
+  }
   refreshInjection();
+  if (enabled) scheduleWorldbookSync(true);
 }
 
 function toggleBall(): void {
@@ -142,16 +174,25 @@ function toggleBall(): void {
 function openHelp(): void {
   panelState.showHelp = true;
   panelState.showSettings = false;
+  panelState.showApis = false;
 }
 
 function openSettings(): void {
   panelState.showSettings = true;
   panelState.showHelp = false;
+  panelState.showApis = false;
+}
+
+function openApis(): void {
+  panelState.showApis = true;
+  panelState.showHelp = false;
+  panelState.showSettings = false;
 }
 
 function closeSubPanel(): void {
   panelState.showHelp = false;
   panelState.showSettings = false;
+  panelState.showApis = false;
 }
 
 function closePanel(): void {

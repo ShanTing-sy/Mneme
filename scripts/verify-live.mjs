@@ -149,7 +149,40 @@ async function main() {
         ),
         true,
       );
-      check('底部四个标签', await evaluate("document.querySelectorAll('.mneme-tab').length"), 4);
+      check('底部五个标签', await evaluate("document.querySelectorAll('.mneme-tab').length"), 5);
+      check(
+        '提示词标签在正中间',
+        await evaluate("document.querySelectorAll('.mneme-tab')[2]?.textContent?.trim()"),
+        '提示词',
+      );
+      await evaluate("document.querySelectorAll('.mneme-tab')[2].click(); 'ok'");
+      await sleep(200);
+      check(
+        '真实酒馆提示词配置页可见',
+        await evaluate(
+          "document.querySelector('.mneme-tab-body')?.textContent?.includes('提示词配置')",
+        ),
+        true,
+      );
+      await evaluate("document.querySelector('.mneme-icon-btn[data-mneme=\"api\"]')?.click(); 'ok'");
+      await sleep(300);
+      check(
+        '真实酒馆可打开副 API 面板',
+        await evaluate("!!document.querySelector('.mneme-api-editor')"),
+        true,
+      );
+      check(
+        '副 API 面板包含来源与参数',
+        await evaluate(`(() => {
+          const text = document.querySelector('.mneme-api-editor')?.textContent ?? '';
+          return text.includes('来源') && text.includes('总结参数') && text.includes('绑定提示词');
+        })()`),
+        true,
+      );
+      await evaluate("document.querySelector('.mneme-back-btn')?.click(); 'ok'");
+      await sleep(200);
+      await evaluate("document.querySelectorAll('.mneme-tab')[0].click(); 'ok'");
+      await sleep(200);
       check('悬浮球出现在聊天区', await evaluate("!!document.querySelector('.mneme-ball')"), true);
       check(
         '悬浮球停靠在 #chat 右缘',
@@ -307,11 +340,21 @@ async function main() {
 
       await evaluate("document.querySelector('.mneme-back-btn').click(); 'ok'");
       await sleep(200);
+      await evaluate("document.querySelectorAll('.mneme-tab')[2].click(); 'ok'");
+      await sleep(300);
+      await saveShot('prompts');
+
+      await evaluate("document.querySelector('.mneme-icon-btn[data-mneme=\"api\"]').click(); 'ok'");
+      await sleep(300);
+      await saveShot('api');
+
+      await evaluate("document.querySelector('.mneme-back-btn').click(); 'ok'");
+      await sleep(200);
       await evaluate("document.querySelector('.mneme-icon-btn[title=\"使用说明\"]').click(); 'ok'");
       await sleep(300);
       await saveShot('help');
 
-      results.push('截图已保存：docs/screenshots/{panel,settings,help}.png');
+      results.push('截图已保存：docs/screenshots/{panel,settings,prompts,api,help}.png');
     } catch (error) {
       results.push('截图失败：' + error.message);
     }

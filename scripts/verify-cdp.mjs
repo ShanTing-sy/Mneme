@@ -24,12 +24,16 @@ const PAGE = `<!doctype html>
 <div id="extensionsMenu"></div>
 <script>
 window.__handlers = {};
+window.__worlds = {};
+const worlds = window.__worlds;
 const ctx = {
   name1: 'user',
   chat: [],
   chatMetadata: {},
+  chatId: '测试聊天',
+  getCurrentChatId: () => '测试聊天',
   extensionSettings: { mneme: { autoInitBonds: false, autoTimeline: false } },
-  characters: [{ name: '甲' }],
+  characters: [{ name: '甲', chat: '测试聊天' }],
   characterId: 0,
   eventTypes: {
     MESSAGE_RECEIVED: 'message_received',
@@ -37,6 +41,7 @@ const ctx = {
     MESSAGE_DELETED: 'message_deleted',
     CHAT_CHANGED: 'chat_changed',
     GENERATION_STARTED: 'generation_started',
+    GENERATION_STOPPED: 'generation_stopped',
     GENERATE_AFTER_DATA: 'generate_after_data'
   },
   eventSource: {
@@ -49,12 +54,44 @@ const ctx = {
   saveMetadata() { window.__saved = (window.__saved || 0) + 1; },
   saveSettingsDebounced() {},
   getWorldInfoNames() { return ['世界A']; },
-  loadWorldInfo: async () => ({ entries: {} }),
+  loadWorldInfo: async (name) => worlds[name] ?? null,
+  saveWorldInfo: async (name, data) => { worlds[name] = structuredClone(data); },
+  updateWorldInfoList: async () => {},
   getCharacterCardFields: () => ({ description: '测试角色', personality: '安静' }),
-  generateRaw: async () => '{"bonds":[]}'
+  generateRaw: async () => '{"bonds":[]}',
+  ConnectionManagerRequestService: {
+    getSupportedProfiles: () => [{ id: 'p1', name: '测试连接', model: 'profile-model' }],
+    sendRequest: async () => ({ content: '<!--MNEME\\n{"summary":"连接配置的摘要"}\\nMNEME-->' })
+  }
 };
 window.SillyTavern = { getContext: () => ctx };
 window.__ctx = ctx;
+
+window.__apiCalls = [];
+const realFetch = window.fetch.bind(window);
+window.fetch = async (url, options) => {
+  const target = String(url);
+  window.__apiCalls.push(target);
+  if (target.includes('/models')) {
+    return new Response(JSON.stringify({ data: [{ id: 'stub-model' }] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+  if (target.includes('/chat/completions')) {
+    const content = '<!--MNEME\\n' + JSON.stringify({
+      summary: '副 API 生成的摘要',
+      storyTime: '深夜',
+      location: '钟楼',
+      importance: 'normal'
+    }) + '\\nMNEME-->';
+    return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+  return realFetch(url, options);
+};
 </script>
 <script type="module" src="/dist/index.js"></script>
 </body></html>`;
@@ -197,7 +234,12 @@ async function main() {
       ),
       true,
     );
-    check('底部四个标签', await evaluate("document.querySelectorAll('.mneme-tab').length"), 4);
+    check('底部五个标签', await evaluate("document.querySelectorAll('.mneme-tab').length"), 5);
+    check(
+      '提示词标签在正中间',
+      await evaluate("document.querySelectorAll('.mneme-tab')[2]?.textContent?.trim()"),
+      '提示词',
+    );
     check(
       '初始位置默认居中',
       await evaluate(
@@ -231,10 +273,25 @@ async function main() {
     await sleep(900);
 
     check(
-      '正文中的记忆块已剥离',
-      await evaluate("window.__ctx.chat[0].mes"),
-      '她抬头看了你一眼。',
+      '聊天正文与记忆块都保留',
+      await evaluate(
+        "window.__ctx.chat[0].mes.includes('她抬头看了你一眼') && window.__ctx.chat[0].mes.includes('MNEME')",
+      ),
+      true,
     );
+
+    const promptStripRaw = await evaluate(`(() => {
+      const data = { prompt: [{ role: 'assistant', content: window.__ctx.chat[0].mes }] };
+      window.__handlers['generate_after_data'][0](data);
+      const content = String(data.prompt[0].content ?? '');
+      return JSON.stringify({
+        hasBody: content.includes('她抬头看了你一眼'),
+        hasBlock: content.includes('MNEME'),
+      });
+    })()`);
+    const promptStripped = JSON.parse(promptStripRaw);
+    check('发给模型的提示词保留正文', promptStripped.hasBody, true);
+    check('发给模型的提示词剔除记忆块', promptStripped.hasBlock, false);
     check(
       '条目已落库',
       await evaluate("window.__ctx.chatMetadata.mneme.entries.length"),
@@ -296,7 +353,7 @@ async function main() {
       true,
     );
 
-    await evaluate("document.querySelectorAll('.mneme-tab')[2].click(); 'ok'");
+    await evaluate("document.querySelectorAll('.mneme-tab')[3].click(); 'ok'");
     await sleep(200);
     check(
       '道具标签渲染',
@@ -304,7 +361,7 @@ async function main() {
       true,
     );
 
-    await evaluate("document.querySelectorAll('.mneme-tab')[3].click(); 'ok'");
+    await evaluate("document.querySelectorAll('.mneme-tab')[4].click(); 'ok'");
     await sleep(200);
     check(
       '剧情线空态渲染',
@@ -323,6 +380,57 @@ async function main() {
       '删除消息后条目被移除',
       await evaluate("window.__ctx.chatMetadata.mneme.entries.length"),
       0,
+    );
+
+    // 跨代码块剥离安全护栏：不能把两个块之间的正文一起吃掉
+    await evaluate(`(() => {
+      const ctx = window.__ctx;
+      ctx.chat.push({
+        mes: '正文前\\n\`\`\`json\\n{"foo":1}\\n\`\`\`\\n中间正文\\n\`\`\`json\\n{"summary":"跨块测试","importance":"normal"}\\n\`\`\`\\n正文后',
+        is_user: false, swipe_id: 0, swipes: []
+      });
+      window.__handlers['message_received'][0](ctx.chat.length - 1, 'normal');
+      return 'ok';
+    })()`);
+    await sleep(500);
+    check(
+      '跨块：聊天正文完整保留',
+      await evaluate(
+        "window.__ctx.chat[0].mes.includes('正文前') && window.__ctx.chat[0].mes.includes('中间正文') && window.__ctx.chat[0].mes.includes('正文后')",
+      ),
+      true,
+    );
+    check(
+      '跨块：聊天保留非 summary 代码块',
+      await evaluate(`window.__ctx.chat[0].mes.includes('"foo"')`),
+      true,
+    );
+    const crossPromptRaw = await evaluate(`(() => {
+      const data = { prompt: [{ role: 'assistant', content: window.__ctx.chat[0].mes }] };
+      window.__handlers['generate_after_data'][0](data);
+      const text = String(data.prompt[0].content ?? '');
+      return JSON.stringify({
+        hasBefore: text.includes('正文前'),
+        hasMiddle: text.includes('中间正文'),
+        hasAfter: text.includes('正文后'),
+        hasFoo: text.includes('"foo"'),
+        hasSummary: text.includes('"summary"'),
+      });
+    })()`);
+    const crossPrompt = JSON.parse(crossPromptRaw);
+    check(
+      '跨块：提示词保留块间正文',
+      crossPrompt.hasBefore && crossPrompt.hasMiddle && crossPrompt.hasAfter,
+      true,
+    );
+    check('跨块：提示词保留非 summary 代码块', crossPrompt.hasFoo, true);
+    check('跨块：提示词剔除 summary 代码块', crossPrompt.hasSummary, false);
+    check(
+      '跨块测试已入账',
+      await evaluate(
+        "(window.__ctx.chatMetadata.mneme.entries ?? []).some((e) => e.summary.includes('跨块测试'))",
+      ),
+      true,
     );
 
     // 满 10 条自动封卷
@@ -359,35 +467,90 @@ async function main() {
       true,
     );
 
-    // 可编辑的摘要提示词
-    await evaluate("document.querySelectorAll('.mneme-tab')[0].click(); 'ok'");
+    // ── 提示词配置：折叠 → 修改 → 保存 → 切换 ──
+    await evaluate("document.querySelectorAll('.mneme-tab')[2].click(); 'ok'");
     await sleep(200);
+    check(
+      '默认配置行存在',
+      await evaluate(
+        "document.querySelector('.mneme-tab-body')?.textContent?.includes('内置默认提示词')",
+      ),
+      true,
+    );
+    check(
+      '未点修改时不显示编辑器',
+      await evaluate("!!document.querySelector('.mneme-preset-editor')"),
+      false,
+    );
     await evaluate(
-      "Array.from(document.querySelectorAll('.mneme-tab-body button')).find((b) => b.textContent.trim() === '提示词').click(); 'ok'",
+      "Array.from(document.querySelectorAll('.mneme-preset button')).find((b) => b.textContent.trim() === '查看').click(); 'ok'",
     );
     await sleep(200);
     check(
-      '提示词编辑器打开且预填默认内容',
+      '默认提示词可展开查看',
+      await evaluate("!!document.querySelector('.mneme-default-preview textarea')"),
+      true,
+    );
+    check(
+      '默认提示词只读不可改',
+      await evaluate("document.querySelector('.mneme-default-preview textarea')?.readOnly"),
+      true,
+    );
+    check(
+      '默认提示词内容完整',
       await evaluate(
-        "!!document.querySelector('.mneme-tab-body textarea') && document.querySelector('.mneme-tab-body textarea').value.includes('MNEME')",
+        "document.querySelector('.mneme-default-preview textarea')?.value.includes('MNEME')",
       ),
       true,
     );
     await evaluate(
-      "(() => { const t = document.querySelector('.mneme-tab-body textarea'); t.value = '自定义摘要提示词ABC'; t.dispatchEvent(new Event('input', { bubbles: true })); return 'ok'; })()",
+      "Array.from(document.querySelectorAll('.mneme-preset button')).find((b) => b.textContent.trim() === '收起').click(); 'ok'",
+    );
+    await sleep(150);
+
+    await evaluate(
+      "Array.from(document.querySelectorAll('.mneme-tab-body button')).find((b) => b.textContent.trim() === '新建配置').click(); 'ok'",
+    );
+    await sleep(200);
+    check('新建后出现编辑器', await evaluate("!!document.querySelector('.mneme-preset-editor')"), true);
+    await evaluate(
+      "Array.from(document.querySelectorAll('.mneme-preset-editor button')).find((b) => b.textContent.trim() === '读取当前设置').click(); 'ok'",
+    );
+    await sleep(150);
+    check(
+      '读取当前设置会填入默认提示词',
+      await evaluate(
+        "document.querySelector('.mneme-preset-editor textarea')?.value.includes('MNEME')",
+      ),
+      true,
     );
     await evaluate(
-      "Array.from(document.querySelectorAll('.mneme-tab-body button')).find((b) => b.textContent.trim() === '保存').click(); 'ok'",
+      "(() => { const t = document.querySelector('.mneme-preset-editor textarea'); t.value = '自定义摘要提示词ABC'; t.dispatchEvent(new Event('input', { bubbles: true })); return 'ok'; })()",
+    );
+    await evaluate(
+      "Array.from(document.querySelectorAll('.mneme-preset-editor button')).find((b) => b.textContent.trim() === '保存').click(); 'ok'",
     );
     await sleep(300);
     check(
-      '自定义提示词已保存',
-      await evaluate("window.__ctx.extensionSettings.mneme.summaryPrompt"),
+      '配置提示词已保存',
+      await evaluate("window.__ctx.extensionSettings.mneme.summaryPresets[0].prompt"),
       '自定义摘要提示词ABC',
     );
     check(
-      '注入改用自定义提示词',
+      '配置切换后注入改用自定义提示词',
       await evaluate("window.__injected.value.includes('自定义摘要提示词ABC')"),
+      true,
+    );
+    check(
+      '保存后收起编辑器',
+      await evaluate("!!document.querySelector('.mneme-preset-editor')"),
+      false,
+    );
+    check(
+      '折叠行显示摘要',
+      await evaluate(
+        "document.querySelector('.mneme-preset-summary')?.textContent?.includes('提示词')",
+      ),
       true,
     );
 
@@ -428,6 +591,182 @@ async function main() {
       true,
     );
 
+    // ── 副 API 面板与调用 ──
+    await evaluate("document.querySelector('.mneme-icon-btn[data-mneme=\"api\"]').click(); 'ok'");
+    await sleep(300);
+    check('副 API 面板打开', await evaluate("!!document.querySelector('.mneme-api-editor')"), true);
+    check(
+      '默认来源是自定义',
+      await evaluate(
+        "document.querySelector('.mneme-api-editor select')?.value === 'custom'",
+      ),
+      true,
+    );
+    await evaluate(`(() => {
+      const root = document.querySelector('.mneme-api-editor');
+      const inputs = [...root.querySelectorAll('input')];
+      const set = (el, value) => { el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); };
+      set(inputs.find((el) => el.placeholder === '例如：本地总结模型'), '测试副API');
+      set(inputs.find((el) => el.placeholder === 'https://api.openai.com/v1'), 'https://stub.test/v1');
+      set(inputs.find((el) => el.placeholder === '例如：gpt-4o-mini'), 'stub-model');
+      return 'ok';
+    })()`);
+    await evaluate(
+      "Array.from(document.querySelectorAll('.mneme-api-editor button')).find((b) => b.textContent.trim() === '保存').click(); 'ok'",
+    );
+    await sleep(300);
+    check(
+      '副 API 已保存',
+      await evaluate("window.__ctx.extensionSettings.mneme.secondaryApis.length"),
+      1,
+    );
+    check(
+      '新副 API 成为当前',
+      await evaluate(
+        "window.__ctx.extensionSettings.mneme.activeSecondaryApiId === window.__ctx.extensionSettings.mneme.secondaryApis[0].id",
+      ),
+      true,
+    );
+
+    await evaluate(
+      "Array.from(document.querySelectorAll('.mneme-seg')).find((b) => b.textContent.trim() === '副 API').click(); 'ok'",
+    );
+    await sleep(300);
+    check(
+      '摘要来源切到副 API',
+      await evaluate("window.__ctx.extensionSettings.mneme.aiSource"),
+      'secondary',
+    );
+    check(
+      '副 API 模式不再注入记录要求',
+      await evaluate("window.__injected.value.includes('Mneme·记录要求')"),
+      false,
+    );
+
+    await evaluate(
+      "Array.from(document.querySelectorAll('.mneme-api-editor button')).find((b) => b.textContent.trim() === '连接').click(); 'ok'",
+    );
+    await sleep(800);
+    check(
+      '连接测试成功',
+      await evaluate(
+        "document.querySelector('.mneme-api-editor')?.textContent?.includes('连接成功')",
+      ),
+      true,
+    );
+    await evaluate(
+      "Array.from(document.querySelectorAll('.mneme-api-editor button')).find((b) => b.textContent.trim() === '获取模型').click(); 'ok'",
+    );
+    await sleep(500);
+    check(
+      '获取模型列表',
+      await evaluate(
+        "document.querySelector('.mneme-api-editor')?.textContent?.includes('已获取 1 个模型')",
+      ),
+      true,
+    );
+
+    await evaluate(`(() => {
+      const ctx = window.__ctx;
+      ctx.chat.push({
+        mes: '她推开门，风灌进来。',
+        is_user: false, swipe_id: 0, swipes: []
+      });
+      window.__handlers['message_received'][0](ctx.chat.length - 1, 'normal');
+      return 'ok';
+    })()`);
+    await sleep(1600);
+    check(
+      '副 API 已生成并写入摘要',
+      await evaluate(
+        "(window.__ctx.chatMetadata.mneme.entries ?? []).some((e) => e.summary.includes('副 API 生成的摘要'))",
+      ),
+      true,
+    );
+    check(
+      '确实调用了自定义端点',
+      await evaluate(
+        "window.__apiCalls.some((url) => url.includes('/chat/completions'))",
+      ),
+      true,
+    );
+
+    // ── 世界书注入 ──
+    await evaluate("document.querySelector('.mneme-back-btn').click(); 'ok'");
+    await sleep(200);
+    await evaluate("document.querySelector('.mneme-icon-btn[title=\"设置\"]').click(); 'ok'");
+    await sleep(200);
+    const switchInjection = `(() => {
+      const select = Array.from(document.querySelectorAll('.mneme-field select')).find((el) =>
+        [...el.options].some((option) => option.value === 'worldbook')
+      );
+      select.value = 'worldbook';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      return 'ok';
+    })()`;
+    await evaluate(switchInjection);
+    await sleep(1400);
+    check(
+      '世界书已创建',
+      await evaluate("!!window.__worlds['Mneme·甲·测试聊天']"),
+      true,
+    );
+    check(
+      '世界书已绑定当前聊天',
+      await evaluate("window.__ctx.chatMetadata.world_info"),
+      'Mneme·甲·测试聊天',
+    );
+    check(
+      '世界书包含长期与短期条目',
+      await evaluate(`(() => {
+        const book = window.__worlds['Mneme·甲·测试聊天'];
+        if (!book) return false;
+        const comments = Object.values(book.entries).map((entry) => entry.comment);
+        return comments.includes('Mneme·长期记忆') && comments.includes('Mneme·短期记忆');
+      })()`),
+      true,
+    );
+    check(
+      '世界书模式清空扩展提示词',
+      await evaluate("window.__injected.value"),
+      '',
+    );
+
+    const switchPrompt = `(() => {
+      const select = Array.from(document.querySelectorAll('.mneme-field select')).find((el) =>
+        [...el.options].some((option) => option.value === 'worldbook')
+      );
+      select.value = 'prompt';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      return 'ok';
+    })()`;
+    await evaluate(switchPrompt);
+    await sleep(1400);
+    check(
+      '切回提示词后解除世界书绑定',
+      await evaluate("window.__ctx.chatMetadata.world_info ?? ''"),
+      '',
+    );
+    check(
+      '切回提示词后恢复注入',
+      await evaluate("window.__injected.value.includes('Mneme·')"),
+      true,
+    );
+    check(
+      '切回后托管条目被禁用',
+      await evaluate(`(() => {
+        const book = window.__worlds['Mneme·甲·测试聊天'];
+        if (!book) return false;
+        const managed = Object.values(book.entries).filter((entry) =>
+          String(entry.comment).startsWith('Mneme·')
+        );
+        return managed.length > 0 && managed.every((entry) => entry.disable === true);
+      })()`),
+      true,
+    );
+    await evaluate("document.querySelector('.mneme-back-btn')?.click(); 'ok'");
+    await sleep(200);
+
     // 原始对话前文裁剪：保留 system（含记忆账本）与最近 N 轮
     const trimResult = await evaluate(`(() => {
       const ctx = window.__ctx;
@@ -448,6 +787,30 @@ async function main() {
         has1: contents.includes('问题1'),
       });
     })()`);
+    const trimNoBlockRaw = await evaluate(`(() => {
+      const ctx = window.__ctx;
+      ctx.extensionSettings.mneme = { ...(ctx.extensionSettings.mneme ?? {}), keepRecentTurns: 2 };
+      const prompt = [{ role: 'system', content: '系统提示' }];
+      for (let i = 1; i <= 10; i += 1) {
+        prompt.push({ role: 'user', content: '问题' + i });
+        prompt.push({ role: 'assistant', content: '回答' + i });
+      }
+      const data = { prompt };
+      window.__handlers['generate_after_data'][0](data);
+      const contents = data.prompt.map((m) => m.content);
+      return JSON.stringify({
+        length: data.prompt.length,
+        has9: contents.includes('问题9'),
+        has1: contents.includes('问题1'),
+      });
+    })()`);
+    const trimNoBlock = JSON.parse(trimNoBlockRaw);
+    check(
+      '无记忆块也能按最新轮数裁剪',
+      trimNoBlock.has9 && !trimNoBlock.has1,
+      true,
+    );
+
     // ── 悬浮球 ──
     check('悬浮球存在', await evaluate("!!document.querySelector('.mneme-ball')"), true);
     const ballRaw = await evaluate(`(() => {
@@ -552,7 +915,7 @@ async function main() {
       '抽屉四段标题齐全',
       await evaluate(`(() => {
         const text = document.querySelector('.mneme-drawer')?.textContent ?? '';
-        return ['记忆收录 / 摘要', '楼层隐藏', '道具', '羁绊'].every((label) => text.includes(label));
+        return ['记忆收录 / 摘要', '对模型隐藏', '道具', '羁绊'].every((label) => text.includes(label));
       })()`),
       true,
     );

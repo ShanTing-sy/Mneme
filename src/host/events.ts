@@ -5,14 +5,26 @@ import { hashText } from '../core/hash.ts';
 import { applyDelta } from '../core/reduce.ts';
 import { reconcileState } from '../core/reconcile.ts';
 import { buildInjection } from '../core/inject.ts';
-import { trimGenerateData } from '../core/trim-context.ts';
+import { stripPromptDeltas, trimGenerateData } from '../core/trim-context.ts';
 import { getCtx } from './context.ts';
 import { store, loadFromChat, ensureStateForChat, commitState, flushState } from '../store/chat-state.ts';
 import { readSettings, reloadSettings } from '../store/ui-settings.ts';
 import { cloneData } from '../core/clone.ts';
+import { hasUsableSecondaryApi, shouldIncludeInstruction } from '../core/presets.ts';
 import { panelState } from '../ui/panel-state.ts';
 import { setWandDot } from './wand.ts';
 import { scheduleInitParse } from './init-parse.ts';
+import {
+  abortSecondarySummary,
+  enqueueSecondarySummary,
+  setSummaryRefreshHandler,
+} from './summary-runner.ts';
+import {
+  deactivateWorldbook,
+  ensureWorldbookOffForCurrentChat,
+  resetWorldbookForChat,
+  scheduleWorldbookSync,
+} from './worldbook-sync.ts';
 
 let registered = false;
 
@@ -44,6 +56,8 @@ export function initHost(retries = 40): void {
   ctx.eventSource.on(events.GENERATE_AFTER_DATA, (data: any) => {
     const settings = readSettings();
     if (!settings.enabled) return;
+    // 只处理发给模型的内容：聊天记录本身不动
+    const stripped = stripPromptDeltas(data);
     const removed = trimGenerateData(data, settings.keepRecentTurns);
     panelState.trimmedLast = removed;
     panelState.trimmedAt = Date.now();
@@ -53,12 +67,19 @@ export function initHost(retries = 40): void {
         JSON.stringify({
           isArray: Array.isArray(data?.prompt),
           length: Array.isArray(data?.prompt) ? data.prompt.length : null,
+          stripped,
           removed,
         }),
       );
     }
   });
+  if (events.GENERATION_STOPPED) {
+    ctx.eventSource.on(events.GENERATION_STOPPED, () => {
+      abortSecondarySummary();
+    });
+  }
 
+  setSummaryRefreshHandler(() => refreshInjection());
   reloadSettings();
   loadFromChat();
   refreshInjection();
@@ -73,20 +94,31 @@ export function refreshInjection(): void {
   ensureStateForChat();
 
   const settings = readSettings();
+  const includeInstruction = shouldIncludeInstruction(settings);
 
   if (!settings.enabled || !store.state) {
+    abortSecondarySummary();
     try {
       ctx.setExtensionPrompt('mneme', '', 1, 1, false, 0);
     } catch (error) {
       console.warn('[Mneme] clear injection failed', error);
     }
+    if (!settings.enabled) {
+      if (panelState.worldbookActive) void deactivateWorldbook();
+      else void ensureWorldbookOffForCurrentChat();
+    }
     return;
   }
 
-  const text = buildInjection(store.state, settings, {
-    userName: ctx.name1 || 'user',
-    charName: ctx.characters?.[ctx.characterId]?.name || 'char',
-  });
+  const text = buildInjection(
+    store.state,
+    settings,
+    {
+      userName: ctx.name1 || 'user',
+      charName: ctx.characters?.[ctx.characterId]?.name || 'char',
+    },
+    { includeInstruction },
+  );
 
   if (settings.debug) {
     console.info(
@@ -96,14 +128,40 @@ export function refreshInjection(): void {
         hasState: !!store.state,
         length: text.length,
         keepRecentTurns: settings.keepRecentTurns,
+        injectionMode: settings.injectionMode,
+        aiSource: settings.aiSource,
+        includeInstruction,
       }),
     );
+  }
+
+  if (settings.injectionMode === 'worldbook') {
+    // 世界书尚未就绪时先用扩展提示词兜底，成功后由同步器清空
+    try {
+      ctx.setExtensionPrompt(
+        'mneme',
+        panelState.worldbookReady ? '' : text,
+        1,
+        1,
+        false,
+        0,
+      );
+    } catch (error) {
+      console.warn('[Mneme] inject fallback failed', error);
+    }
+    scheduleWorldbookSync();
+    return;
   }
 
   try {
     ctx.setExtensionPrompt('mneme', text, 1, 1, false, 0);
   } catch (error) {
     console.warn('[Mneme] inject failed', error);
+  }
+  if (panelState.worldbookActive) {
+    void deactivateWorldbook();
+  } else {
+    void ensureWorldbookOffForCurrentChat();
   }
 }
 
@@ -126,6 +184,11 @@ export async function onMessageReceived(messageId: number, type: string): Promis
   const parsed = parseDelta(original);
 
   if (!parsed.ok && !parsed.block) {
+    // 副 API 模式：主模型不再写 MNEME 块，交给独立请求总结
+    if (settings.aiSource === 'secondary' && hasUsableSecondaryApi(settings)) {
+      enqueueSecondarySummary(messageId, original);
+      return;
+    }
     if (settings.showMissingBadge) {
       panelState.missing += 1;
       setWandDot(true);
@@ -134,8 +197,8 @@ export async function onMessageReceived(messageId: number, type: string): Promis
     return;
   }
 
-  const stripped = stripDelta(original);
-  const cleanText = stripped.text;
+  // 只解析，不改写聊天正文：记忆块保留在聊天里，只在发给模型时剔除。
+  const cleanText = stripDelta(original).text;
   const swipeId = Number.isInteger(message.swipe_id) ? message.swipe_id : 0;
 
   const delta: Delta =
@@ -160,17 +223,6 @@ export async function onMessageReceived(messageId: number, type: string): Promis
     panelState.ballDot = true;
   }
 
-  message.mes = cleanText;
-  if (Array.isArray(message.swipes) && message.swipes[swipeId] !== undefined) {
-    message.swipes[swipeId] = cleanText;
-  }
-
-  try {
-    ctx.updateMessageBlock?.(messageId, message, { rerenderMessage: true });
-  } catch (error) {
-    console.warn('[Mneme] rerender failed', error);
-  }
-
   if (result.sealed) {
     panelState.lastSealed = result.sealed.index;
     setWandDot(true);
@@ -179,6 +231,7 @@ export async function onMessageReceived(messageId: number, type: string): Promis
 
   commitState(result.state);
   refreshInjection();
+  scheduleWorldbookSync(true);
   await flushState();
 }
 
@@ -187,7 +240,7 @@ export async function onMessageEdited(messageId: number): Promise<void> {
   if (!ctx || !store.state) return;
 
   const message = ctx.chat?.[messageId];
-  if (!message) return;
+  if (!message || message.is_user) return;
 
   const settings = readSettings();
   const swipeId = Number.isInteger(message.swipe_id) ? message.swipe_id : 0;
@@ -202,32 +255,29 @@ export async function onMessageEdited(messageId: number): Promise<void> {
       const next = cloneData(store.state);
       const entry = next.entries.find((item) => item.id === target.id);
       if (entry) {
-        entry.mesHash = hashText(String(message.mes ?? ''));
+        entry.mesHash = hashText(stripDelta(String(message.mes ?? '')).text);
         entry.stale = true;
         commitState(next);
+        refreshInjection();
+        scheduleWorldbookSync(true);
         await flushState();
       }
     }
     return;
   }
 
-  const stripped = stripDelta(String(message.mes ?? ''));
+  // 同样不改写聊天正文；只把「去掉记忆块后的正文」用于指纹
+  const cleanText = stripDelta(String(message.mes ?? '')).text;
   const result = applyDelta(store.state, parsed.delta, {
     messageId,
     swipeId,
-    mesHash: hashText(stripped.text),
+    mesHash: hashText(cleanText),
     volumeSize: settings.volumeSize,
   });
 
-  message.mes = stripped.text;
-  try {
-    ctx.updateMessageBlock?.(messageId, message, { rerenderMessage: true });
-  } catch (error) {
-    console.warn('[Mneme] rerender failed', error);
-  }
-
   commitState(result.state);
   refreshInjection();
+  scheduleWorldbookSync(true);
   await flushState();
 }
 
@@ -240,10 +290,13 @@ export async function onMessageDeleted(): Promise<void> {
 
   commitState(result.state);
   refreshInjection();
+  scheduleWorldbookSync(true);
   await flushState();
 }
 
 export async function onChatChanged(): Promise<void> {
+  abortSecondarySummary();
+  resetWorldbookForChat();
   panelState.missing = 0;
   panelState.raw = 0;
   panelState.trimmedLast = 0;

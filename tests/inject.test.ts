@@ -179,6 +179,29 @@ test('never drops current summaries even under a tiny budget', () => {
   assert.match(text, /必须保留的摘要3/);
 });
 
+test('副 API 模式可关闭记录要求但保留记忆内容', () => {
+  const state = createEmptyState();
+  state.entries.push({
+    id: 'e1',
+    messageId: 1,
+    swipeId: 0,
+    mesHash: 'h',
+    at: 0,
+    storyTime: '',
+    location: '',
+    summary: '仍然要保留的记忆',
+    characters: [],
+    result: '',
+    importance: 'normal',
+    volume: 1,
+    source: 'model',
+  });
+
+  const text = buildInjection(state, settings, deps, { includeInstruction: false });
+  assert.doesNotMatch(text, /Mneme·记录要求/);
+  assert.match(text, /仍然要保留的记忆/);
+});
+
 test('keeps permanent memory even under a tiny budget', () => {
   const state = createEmptyState();
   state.entries.push({

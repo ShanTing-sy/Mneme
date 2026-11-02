@@ -32,7 +32,7 @@
     </label>
 
     <label class="mneme-field">
-      <span>原始对话保留轮数</span>
+      <span>发送给模型的最新轮数</span>
       <input
         class="mneme-input"
         type="number"
@@ -55,7 +55,7 @@
       </datalist>
     </label>
     <p class="mneme-muted">
-      仅对聊天补全接口生效；系统提示与记忆账本始终保留，摘要不受影响。
+      只影响发给模型的原始对话，不会删除聊天记录；系统提示与记忆账本始终保留，摘要不受影响。
     </p>
 
     <label class="mneme-field">
@@ -115,6 +115,59 @@
       <span>调试模式（显示原始数据）</span>
       <input type="checkbox" :checked="settingsStore.debug" @change="patch('debug', checked($event))" />
     </label>
+
+    <div class="mneme-section-title">记忆注入</div>
+    <label class="mneme-field">
+      <span>注入方式</span>
+      <select
+        class="mneme-input"
+        :value="settingsStore.injectionMode"
+        @change="patchInjectionMode(($event.target as HTMLSelectElement).value)"
+      >
+        <option value="prompt">扩展提示词（默认）</option>
+        <option value="worldbook">世界书</option>
+      </select>
+    </label>
+    <label v-if="settingsStore.injectionMode === 'worldbook'" class="mneme-field">
+      <span>世界书前缀</span>
+      <input
+        class="mneme-input"
+        maxlength="20"
+        :value="settingsStore.worldbookPrefix"
+        @change="patchWorldbookPrefix"
+      />
+    </label>
+    <p class="mneme-muted">
+      世界书按「当前聊天 + 角色」自动创建并绑定为聊天世界书；与现有聊天世界书冲突时不会自动替换。
+    </p>
+
+    <div v-if="settingsStore.injectionMode === 'worldbook'" class="mneme-card">
+      <p class="mneme-muted">当前世界书：{{ panelState.worldbookBook || '尚未创建' }}</p>
+      <p class="mneme-muted">
+        绑定状态：{{ panelState.worldbookBound ? '已绑定当前聊天' : '未绑定' }}
+      </p>
+      <p v-if="panelState.worldbookConflict" class="mneme-warn">
+        当前聊天已绑定其他世界书「{{ panelState.worldbookConflict }}」，未自动替换。
+      </p>
+      <p v-if="panelState.worldbookError" class="mneme-warn">{{ panelState.worldbookError }}</p>
+      <div class="mneme-row">
+        <button class="mneme-btn mneme-btn-sm" @click="syncWorldbookNow">立即同步</button>
+        <button
+          v-if="panelState.worldbookConflict"
+          class="mneme-btn mneme-btn-sm"
+          @click="replaceBinding"
+        >
+          替换绑定
+        </button>
+        <button
+          v-if="panelState.worldbookBound"
+          class="mneme-btn mneme-btn-sm"
+          @click="unbindNow"
+        >
+          解除绑定
+        </button>
+      </div>
+    </div>
 
     <div class="mneme-section-title">外观</div>
 
@@ -300,6 +353,12 @@ import { store, commitState, flushState } from '../../store/chat-state.ts';
 import { createEmptyState } from '../../core/schema.ts';
 import { migrateState } from '../../core/migrate.ts';
 import { refreshInjection } from '../../host/events.ts';
+import {
+  deactivateWorldbook,
+  forceBindWorldbook,
+  scheduleWorldbookSync,
+} from '../../host/worldbook-sync.ts';
+import { panelState } from '../panel-state.ts';
 import type { MnemeUi } from '../../core/types.ts';
 
 function checked(event: Event): boolean {
@@ -309,6 +368,7 @@ function checked(event: Event): boolean {
 function patch<K extends keyof typeof settingsStore>(key: K, value: unknown): void {
   updateSettings({ [key]: value } as any);
   refreshInjection();
+  scheduleWorldbookSync(true);
 }
 
 function patchNumber(
@@ -317,6 +377,8 @@ function patchNumber(
 ): void {
   const value = Number((event.target as HTMLInputElement).value) || 0;
   updateSettings({ [key]: value } as any);
+  refreshInjection();
+  scheduleWorldbookSync(true);
 }
 
 function patchUi(key: keyof MnemeUi, value: unknown): void {
@@ -331,6 +393,41 @@ function patchUiNumber(key: keyof MnemeUi, event: Event, fallback = 14): void {
 function patchUiText(key: 'ballText' | 'ballImage', event: Event): void {
   const value = (event.target as HTMLInputElement).value;
   patchUi(key, key === 'ballText' ? value.slice(0, 8) : value.trim());
+}
+
+function patchInjectionMode(value: string): void {
+  const mode = value === 'worldbook' ? 'worldbook' : 'prompt';
+  updateSettings({ injectionMode: mode });
+  if (mode === 'worldbook') {
+    scheduleWorldbookSync(true);
+  } else {
+    void deactivateWorldbook();
+  }
+  refreshInjection();
+}
+
+function patchWorldbookPrefix(event: Event): void {
+  const value = (event.target as HTMLInputElement).value;
+  updateSettings({ worldbookPrefix: value });
+  if (settingsStore.injectionMode === 'worldbook') {
+    void deactivateWorldbook().then(() => {
+      scheduleWorldbookSync(true);
+    });
+  }
+}
+
+function syncWorldbookNow(): void {
+  scheduleWorldbookSync(true);
+}
+
+function replaceBinding(): void {
+  void forceBindWorldbook();
+}
+
+function unbindNow(): void {
+  // 解除绑定的同时切回扩展提示词，避免下一次同步又自动绑回去
+  updateSettings({ injectionMode: 'prompt' });
+  void deactivateWorldbook().then(() => refreshInjection());
 }
 
 function resetBallStyle(): void {
@@ -385,6 +482,7 @@ function importJson(event: Event): void {
       }
       commitState(result.state);
       refreshInjection();
+      scheduleWorldbookSync(true);
       void flushState();
     } catch {
       window.alert('文件不是有效的 JSON。');
@@ -398,6 +496,7 @@ function clearState(): void {
   if (!window.confirm('确定清空当前聊天的全部 Mneme 记忆吗？此操作不可撤销。')) return;
   commitState(createEmptyState());
   refreshInjection();
+  scheduleWorldbookSync(true);
   void flushState();
 }
 </script>

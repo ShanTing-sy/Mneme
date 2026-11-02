@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { trimChatMessages, trimGenerateData } from '../src/core/trim-context.ts';
+import {
+  stripPromptDeltas,
+  trimChatMessages,
+  trimGenerateData,
+} from '../src/core/trim-context.ts';
 
 function conversation(turns: number) {
   const messages: any[] = [{ role: 'system', content: '系统提示' }];
@@ -42,9 +46,11 @@ test('does nothing when the conversation is shorter than the limit', () => {
   assert.equal(result.messages.length, messages.length);
 });
 
-test('trimGenerateData only touches prompts containing the memory block', () => {
+test('trimGenerateData 在没有记忆块时也会按轮数裁剪（只影响提示词）', () => {
   const without = { prompt: conversation(10) };
-  assert.equal(trimGenerateData(without, 2), 0);
+  const removedWithout = trimGenerateData(without, 2);
+  assert.ok(removedWithout > 0);
+  assert.ok(without.prompt.length < 21);
 
   const withBlock = {
     prompt: [
@@ -55,6 +61,34 @@ test('trimGenerateData only touches prompts containing the memory block', () => 
   const removed = trimGenerateData(withBlock, 2);
   assert.ok(removed > 0);
   assert.ok(withBlock.prompt.length < 21);
+});
+
+test('stripPromptDeltas 只从提示词剔除 MNEME 块，正文保留且不改原对象', () => {
+  const original = {
+    role: 'assistant',
+    content: '正文保留\n<!--MNEME\n{"summary":"x"}\nMNEME-->',
+  };
+  const userQuote = { role: 'user', content: '用户引用\n<!--MNEME {"summary":"u"} MNEME-->' };
+  const data = {
+    prompt: [
+      userQuote,
+      original,
+      { role: 'assistant', content: '```json\n{"summary":"y"}\n```' },
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: '分片正文\n<!--MNEME {"summary":"z"} MNEME-->' }],
+      },
+    ],
+  };
+
+  const changed = stripPromptDeltas(data);
+  assert.equal(changed, 3);
+  assert.equal(data.prompt[0].content, userQuote.content);
+  assert.equal(data.prompt[1].content, '正文保留');
+  assert.equal(data.prompt[2].content, '');
+  assert.equal((data.prompt[3].content as any[])[0].text, '分片正文');
+  assert.match(original.content, /MNEME/);
+  assert.equal(original.content, '正文保留\n<!--MNEME\n{"summary":"x"}\nMNEME-->');
 });
 
 test('skips non-array prompts (text completion)', () => {
